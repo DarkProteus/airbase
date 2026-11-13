@@ -1,0 +1,18 @@
+.game-root {
+  position: fixed;
+  inset: 0;
+  background: #10151c;
+  font-family: system-ui, sans-serif;
+}
+.game-view {
+  position: absolute;
+  inset: 0;
+}
+.hud {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  color: #dfe6ee;
+  font-size: 14px;
+  pointer-events: none;
+}
