@@ -1,5 +1,5 @@
-import { buyRejection, groupStats, nextUpgradeCost, rearmTicksLeft, sellRefund, TICK_RATE, toTicks, upgradeRejection, zoneRejection } from '../../sim';
-import type { Command, Content, MissionConfig, RejectReason, SimEvent, SimState, SortiePhase, UnitConfig, UnitState, Vec2, World } from '../../sim';
+import { buyRejection, groupStats, nextUpgradeCost, objectiveGoal, objectiveRoute, rearmTicksLeft, sellRefund, TICK_RATE, toTicks, upgradeRejection, zoneRejection } from '../../sim';
+import type { Command, Content, MissionConfig, ObjectiveConfig, RejectReason, SimEvent, SimState, SortiePhase, UnitConfig, UnitState, Vec2, World } from '../../sim';
 import { viewUnit } from '../entity/model';
 import type { UnitView } from '../entity/model';
 
@@ -81,9 +81,43 @@ export function rejectionNotice(events: readonly SimEvent[]): string | undefined
 const PHASE_TEXT = { prep: 'подготовка', wave: 'волна' } as const;
 const STATUS_TEXT = { running: '', won: 'победа', lost: 'поражение' } as const;
 
-/** Строка HUD из снапшота. */
+/** Состояние цели миссии для HUD: прочность и прогресс к победе; undefined — у миссии нет цели. */
+export interface ObjectiveInfo {
+  type: ObjectiveConfig['type'];
+  hp: number;
+  maxHp: number;
+  /** Доля пути к победе, 0..1. */
+  progress: number;
+  /** Сколько осталось до победы в единицах цели: defend — секунд, escort — клеток маршрута. */
+  left: number;
+}
+
+export function objectiveInfo(mission: MissionConfig, s: SimState): ObjectiveInfo | undefined {
+  const cfg = mission.objective;
+  const st = s.objective;
+  if (!cfg || !st) return undefined;
+  const goal = objectiveGoal(cfg, objectiveRoute(cfg));
+  const left = Math.max(0, goal - st.progress);
+  return {
+    type: cfg.type,
+    hp: Math.max(0, st.hp),
+    maxHp: cfg.hp,
+    progress: goal > 0 ? Math.min(1, st.progress / goal) : 1,
+    left: cfg.type === 'defend' ? left / TICK_RATE : left,
+  };
+}
+
+/** Подписи цели по типу: имя и остаток до победы. Новый тип цели — новая строка здесь. */
+const OBJECTIVE_TEXT: Record<ObjectiveConfig['type'], { name: string; left: (o: ObjectiveInfo) => string }> = {
+  defend: { name: 'объект', left: (o) => `держаться ${Math.ceil(o.left)} с` },
+  escort: { name: 'колонна', left: (o) => `путь ${Math.floor(o.progress * 100)}%` },
+};
+
+/** Строка HUD из снапшота: у миссии с целью вместо жизней базы — прочность цели и остаток до победы. */
 export function hudLine(mission: MissionConfig, s: SimState): string {
-  const parts = [`$ ${s.money}`, `жизни ${s.lives}`, `волна ${s.wave}/${mission.waves.length} (${PHASE_TEXT[s.phase]})`];
+  const o = objectiveInfo(mission, s);
+  const goal = o ? `${OBJECTIVE_TEXT[o.type].name} ${o.hp}/${o.maxHp} · ${OBJECTIVE_TEXT[o.type].left(o)}` : `жизни ${s.lives}`;
+  const parts = [`$ ${s.money}`, goal, `волна ${s.wave}/${mission.waves.length} (${PHASE_TEXT[s.phase]})`];
   if (s.status !== 'running') parts.push(STATUS_TEXT[s.status]);
   return parts.join(' · ');
 }

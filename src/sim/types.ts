@@ -115,6 +115,8 @@ export interface WaveGroup {
   interval: number;
   /** Секунд от старта волны до первого спавна. */
   delay?: number;
+  /** Индекс точки входа из `MissionConfig.spawns` (миссии с целью); по умолчанию 0. */
+  spawn?: number;
 }
 
 /**
@@ -133,13 +135,26 @@ export interface Wave {
   groups: WaveGroup[];
 }
 
+/**
+ * Цель миссии: тип + параметры. Условия победы задаёт тип (см. objective.ts), поражение общее — прочность ≤ 0.
+ * defend — удержать неподвижный объект `duration` секунд;
+ * escort — колонна идёт по `route` со скоростью `speed` (клеток в секунду), победа — дошла до конца маршрута.
+ */
+export type ObjectiveConfig =
+  | { type: 'defend'; pos: Vec2; hp: number; duration: number }
+  | { type: 'escort'; route: Vec2[]; hp: number; speed: number };
+
 export interface MissionConfig {
   id: string;
   name: string;
   /** Размер сетки карты в клетках: x ∈ [0, w), y ∈ [0, h). */
   size: { w: number; h: number };
-  /** Полилиния пути врагов в клетках. */
-  path: Vec2[];
+  /** Полилиния пути врагов в клетках — турельные миссии без цели: враги идут по пути и отнимают жизни базы. */
+  path?: Vec2[];
+  /** Цель миссии: с ней враги появляются в `spawns` и летят на текущую позицию цели, а `path` и жизни базы не используются. */
+  objective?: ObjectiveConfig;
+  /** Точки входа врагов (миссии с целью). */
+  spawns?: Vec2[];
   /** Аэродром: клетка на краю карты, откуда взлетают и куда возвращаются авиагруппы. */
   airfield: Vec2;
   /** Клетки, куда можно ставить юниты. */

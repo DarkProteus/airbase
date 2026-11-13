@@ -24,7 +24,7 @@ import {
 import type { Material } from 'three';
 import { visualOf } from '../ui/entity/model';
 import type { PreviewShape } from '../ui/entity/model';
-import { buildPath, DT, groupStats, pointAt } from '../sim';
+import { DT, groupStats } from '../sim';
 import type { Content, MissionConfig, SimState, Vec2, VisualConfig } from '../sim';
 import { cellToWorld, fitView, ISO_FORWARD, pickCell, slotIndexAt } from './coords';
 import type { IsoView } from './coords';
@@ -66,6 +66,11 @@ const COLORS = {
   spawn: 0xb5533c,
   base: 0x3d9c6b,
   zoneSelected: 0xffd166,
+  airfield: 0x6b7480,
+  airfieldMark: 0xe8e8e8,
+  hpBack: 0x1a1f26,
+  hpFull: 0x4cd07d,
+  hpLow: 0xe5484d,
 };
 
 const CAMERA_DISTANCE = 40;
@@ -101,7 +106,6 @@ export function createScene(
   options: SceneOptions = {},
 ): SceneHandle {
   const { size } = mission;
-  const path = buildPath(mission.path);
 
   const renderer = new WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -133,9 +137,10 @@ export function createScene(
 
   const pathMat = new MeshLambertMaterial({ color: COLORS.path });
   const PATH_W = 0.8;
-  for (let i = 1; i < mission.path.length; i++) {
-    const a = cellToWorld(mission.path[i - 1]!, size);
-    const b = cellToWorld(mission.path[i]!, size);
+  const pathPoints = mission.path ?? [];
+  for (let i = 1; i < pathPoints.length; i++) {
+    const a = cellToWorld(pathPoints[i - 1]!, size);
+    const b = cellToWorld(pathPoints[i]!, size);
     const len = Math.hypot(b.x - a.x, b.z - a.z);
     const seg = new Mesh(new BoxGeometry(len + PATH_W, 0.04, PATH_W), pathMat);
     seg.position.set((a.x + b.x) / 2, 0.02, (a.z + b.z) / 2);
@@ -143,16 +148,30 @@ export function createScene(
     map.add(seg);
   }
 
-  const first = mission.path[0]!;
-  const last = mission.path[mission.path.length - 1]!;
-  const spawn = new Mesh(new BoxGeometry(0.9, 0.12, 0.9), new MeshLambertMaterial({ color: COLORS.spawn }));
-  const sp = cellToWorld(first, size);
-  spawn.position.set(sp.x, 0.06, sp.z);
-  map.add(spawn);
-  const baseMesh = new Mesh(new BoxGeometry(0.9, 0.7, 0.9), new MeshLambertMaterial({ color: COLORS.base }));
-  const bp = cellToWorld(last, size);
-  baseMesh.position.set(bp.x, 0.35, bp.z);
-  map.add(baseMesh);
+  // Точки входа врагов: начало пути или spawns миссии с целью.
+  const spawnMat = new MeshLambertMaterial({ color: COLORS.spawn });
+  for (const cell of mission.objective ? (mission.spawns ?? []) : pathPoints.slice(0, 1)) {
+    const spawn = new Mesh(new BoxGeometry(0.9, 0.12, 0.9), spawnMat);
+    const sp = cellToWorld(cell, size);
+    spawn.position.set(sp.x, 0.06, sp.z);
+    map.add(spawn);
+  }
+  // База в конце пути — только в миссиях без цели; цель миссии рисуется из снапшота (ниже).
+  const last = mission.objective ? undefined : pathPoints[pathPoints.length - 1];
+  if (last) {
+    const baseMesh = new Mesh(new BoxGeometry(0.9, 0.7, 0.9), new MeshLambertMaterial({ color: COLORS.base }));
+    const bp = cellToWorld(last, size);
+    baseMesh.position.set(bp.x, 0.35, bp.z);
+    map.add(baseMesh);
+  }
+
+  // Аэродром: площадка с полосой на клетке у края карты.
+  const ap = cellToWorld(mission.airfield, size);
+  const apron = new Mesh(new BoxGeometry(1.5, 0.06, 1.5), new MeshLambertMaterial({ color: COLORS.airfield }));
+  apron.position.set(ap.x, 0.03, ap.z);
+  const strip = new Mesh(new BoxGeometry(1.3, 0.02, 0.14), new MeshLambertMaterial({ color: COLORS.airfieldMark }));
+  strip.position.set(ap.x, 0.07, ap.z);
+  map.add(apron, strip);
 
   const slotMat = new MeshLambertMaterial({ color: COLORS.slot });
   const slotMeshes: Mesh[] = mission.slots.map((s) => {
@@ -182,7 +201,8 @@ export function createScene(
     mesh: Mesh;
     lift: number;
     scale: number;
-    dist: Tween;
+    x: Tween;
+    y: Tween;
   }
   interface UnitEntry {
     mesh: Mesh;
@@ -216,7 +236,34 @@ export function createScene(
   const live: { spec: EffectSpec; obj: Mesh; mat: MeshBasicMaterial; start: number }[] = [];
   const dynamic = new Group();
   scene.add(dynamic);
-  const baseWorld = cellToWorld(last, size, 0.4);
+  const baseWorld = last ? cellToWorld(last, size, 0.4) : undefined;
+
+  // Цель миссии (объект или колонна) с полосой прочности; позиция и прочность — из снапшота.
+  const HP_W = 1.2;
+  const goal = mission.objective
+    ? {
+        body: new Mesh(new BoxGeometry(0.8, 0.6, 0.8), new MeshLambertMaterial({ color: COLORS.base })),
+        back: new Mesh(new BoxGeometry(HP_W + 0.08, 0.16, 0.06), new MeshBasicMaterial({ color: COLORS.hpBack })),
+        fill: new Mesh(new BoxGeometry(HP_W, 0.1, 0.1), new MeshBasicMaterial({ color: COLORS.hpFull })),
+        maxHp: mission.objective.hp,
+        ratio: 1,
+        x: undefined as Tween | undefined,
+        y: undefined as Tween | undefined,
+      }
+    : undefined;
+  if (goal) scene.add(goal.body, goal.back, goal.fill);
+  const goalWorld = (now: number): Vec3 | undefined =>
+    goal?.x && goal.y ? cellToWorld({ x: tweenValue(goal.x, now), y: tweenValue(goal.y, now) }, size, 0.3) : undefined;
+  const placeGoal = (now: number) => {
+    const p = goalWorld(now);
+    if (!goal || !p) return;
+    goal.body.position.set(p.x, p.y, p.z);
+    goal.back.position.set(p.x, p.y + 0.75, p.z);
+    // Полоса убывает к левому краю: масштаб по X со сдвигом центра.
+    goal.fill.scale.x = Math.max(goal.ratio, 1e-4);
+    goal.fill.position.set(p.x - (HP_W * (1 - goal.ratio)) / 2, p.y + 0.75, p.z);
+    (goal.fill.material as MeshBasicMaterial).color.set(goal.ratio > 0.35 ? COLORS.hpFull : COLORS.hpLow);
+  };
   const clock = () => performance.now();
   const DYING_MS = 320;
   const RECOIL_MS = 140;
@@ -227,7 +274,7 @@ export function createScene(
   const UP = new Vector3(0, 1, 0);
 
   const enemyWorld = (e: EnemyEntry, now: number): Vec3 =>
-    cellToWorld(pointAt(path, tweenValue(e.dist, now)), size, e.lift);
+    cellToWorld({ x: tweenValue(e.x, now), y: tweenValue(e.y, now) }, size, e.lift);
 
   // Круг зоны: единичный диск и кольцо в плоскости земли, масштабируются до радиуса группы.
   const zoneDiscGeo = new CircleGeometry(1, 48).rotateX(-Math.PI / 2);
@@ -261,6 +308,7 @@ export function createScene(
 
   /** Анимации по времени: движение врагов, отдача юнитов, гибель, эффекты. */
   const animate = (now: number) => {
+    placeGoal(now);
     for (const e of enemies.values()) {
       const p = enemyWorld(e, now);
       e.mesh.position.set(p.x, p.y, p.z);
@@ -358,9 +406,21 @@ export function createScene(
         const cfg = content.enemies[e.type];
         const { mesh, lift, scale } = bodyMesh({ tags: cfg?.tags ?? [e.type], visual: cfg?.visual });
         dynamic.add(mesh);
-        entry = { mesh, lift, scale, dist: retarget(undefined, e.dist, now, 0) };
+        entry = { mesh, lift, scale, x: retarget(undefined, e.pos.x, now, 0), y: retarget(undefined, e.pos.y, now, 0) };
         enemies.set(e.id, entry);
-      } else if (isNew) entry.dist = retarget(entry.dist, e.dist, now, duration);
+      } else if (isNew) {
+        entry.x = retarget(entry.x, e.pos.x, now, duration);
+        entry.y = retarget(entry.y, e.pos.y, now, duration);
+      }
+    }
+
+    if (goal && state.objective) {
+      const o = state.objective;
+      if (!goal.x || isNew) {
+        goal.x = retarget(goal.x, o.pos.x, now, goal.x ? duration : 0);
+        goal.y = retarget(goal.y, o.pos.y, now, goal.y ? duration : 0);
+      }
+      goal.ratio = Math.max(0, Math.min(1, o.hp / goal.maxHp));
     }
 
     const seenUnits = new Set<number>();
@@ -428,7 +488,7 @@ export function createScene(
           const e = enemies.get(id);
           return e && enemyWorld(e, now);
         },
-        basePos: baseWorld,
+        basePos: goalWorld(now) ?? baseWorld ?? { x: 0, y: 0, z: 0 },
       });
       for (const spec of plan.effects) spawnEffect(spec, now);
       for (const id of plan.fired) {

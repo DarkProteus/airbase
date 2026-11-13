@@ -157,7 +157,7 @@ describe('детерминизм полной миссии', () => {
     const log: unknown[] = [];
     for (let i = 0; i < 600 * TICK_RATE && sim.state.status === 'running'; i++) {
       step(sim);
-      for (const e of [...sim.state.enemies]) if (e.dist > sim.path.length / 2) damageEnemy(sim, e.id, 1e9);
+      for (const e of [...sim.state.enemies]) if (e.dist > sim.path!.length / 2) damageEnemy(sim, e.id, 1e9);
       log.push(sim.state.events.map((ev) => ({ ...ev })));
     }
     return { snap: snapshot(sim), log };

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { CONTENT, DEFAULT_LINEUP, GROUPS, MISSIONS, UNITS } from '../../content';
 import { createSim, groupStats, SELL_REFUND, snapshot, step, TICK_RATE } from '../../sim';
 import type { Command, SimEvent } from '../../sim';
-import { groupRows, hudLine, PHASE_LABEL, REJECT_TEXT, rejectionNotice, shopItems, slotClick, unitPanel, world, zoneClick } from './selectors';
+import { groupRows, hudLine, objectiveInfo, PHASE_LABEL, REJECT_TEXT, rejectionNotice, shopItems, slotClick, unitPanel, world, zoneClick } from './selectors';
 
 const mission = MISSIONS.sortie!;
 const play = (money: number, ...commands: Command[]) => {
@@ -84,6 +84,31 @@ describe('тексты', () => {
     const w = play(300);
     expect(hudLine(mission, w.state)).toContain('$ 300');
     expect(hudLine(mission, { ...w.state, status: 'lost' })).toContain('поражение');
+    expect(hudLine(mission, w.state)).toContain('жизни 20');
+    expect(objectiveInfo(mission, w.state)).toBeUndefined();
+  });
+
+  test('цель миссии: прочность и остаток до победы из снапшота', () => {
+    const at = (id: string, ticks: number) => {
+      // Без волн: прочность меняет только сам тест.
+      const m = { ...MISSIONS[id]!, waves: [] };
+      const sim = createSim(m, CONTENT, 1);
+      for (let i = 0; i < ticks; i++) step(sim);
+      sim.state.objective!.hp -= 5;
+      return { m, s: snapshot(sim) };
+    };
+    const evac = at('evac', 3 * TICK_RATE);
+    expect(objectiveInfo(evac.m, evac.s)).toEqual({ type: 'defend', hp: 15, maxHp: 20, progress: 3 / 90, left: 87 });
+    expect(hudLine(evac.m, evac.s)).toContain('объект 15/20 · держаться 87 с');
+    expect(hudLine(evac.m, evac.s)).not.toContain('жизни');
+
+    const convoy = at('convoy', 20 * TICK_RATE);
+    const info = objectiveInfo(convoy.m, convoy.s)!;
+    expect(info).toMatchObject({ type: 'escort', hp: 15, maxHp: 20 });
+    // 5 клеток из 21 за 20 с при скорости 0,25.
+    expect(info.left).toBeCloseTo(16, 6);
+    expect(info.progress).toBeCloseTo(5 / 21, 6);
+    expect(hudLine(convoy.m, convoy.s)).toContain('колонна 15/20 · путь 23%');
   });
 });
 

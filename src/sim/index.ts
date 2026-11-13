@@ -1,5 +1,6 @@
 export * from './economy';
 export * from './engine';
+export * from './objective';
 export * from './path';
 export * from './rng';
 export * from './sortie';

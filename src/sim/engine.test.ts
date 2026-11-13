@@ -79,7 +79,7 @@ describe('волны', () => {
 
 describe('путь', () => {
   test('pointAt интерполирует по полилинии', () => {
-    const { path } = createSim(mission(), content, 1);
+    const path = createSim(mission(), content, 1).path!;
     expect(path.length).toBe(8);
     expect(pointAt(path, 2)).toEqual({ x: 2, y: 0 });
     expect(pointAt(path, 6)).toEqual({ x: 4, y: 2 });

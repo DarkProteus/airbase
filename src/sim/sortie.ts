@@ -1,6 +1,5 @@
 import type { RejectReason, World } from './economy';
-import { damageEnemy, DT, TICK_RATE, type EnemyState, type Sim } from './engine';
-import { pointAt } from './path';
+import { damageEnemy, DT, enemyThreat, TICK_RATE, type EnemyState, type Sim } from './engine';
 import { applyModifiers } from './stats';
 import type { AirGroupConfig, Content, MissionConfig, Vec2, WeaponConfig } from './types';
 
@@ -141,7 +140,7 @@ function moveTo(pos: Vec2, target: Vec2, stepLen: number): boolean {
 /** Сколько тиков лететь между точками: время = расстояние / скорость. */
 export const flightTicks = (from: Vec2, to: Vec2, speed: number): number => Math.ceil(dist(from, to) / (speed * DT) - 1e-6);
 
-/** Каждое оружие бьёт самого продвинутого врага с целевым тегом внутри зоны; выстрел расходует боекомплект. */
+/** Каждое оружие бьёт самого опасного (enemyThreat) врага с целевым тегом внутри зоны; выстрел расходует боекомплект. */
 function fire(sim: Sim, g: GroupState, st: GroupStats): void {
   const s = sim.state;
   st.weapons.forEach((weapon, i) => {
@@ -150,7 +149,7 @@ function fire(sim: Sim, g: GroupState, st: GroupStats): void {
     for (const e of s.enemies) {
       const tags = sim.content.enemies[e.type]!.tags;
       if (weapon.targetTags.length && !weapon.targetTags.some((t) => tags.includes(t))) continue;
-      if (dist(pointAt(sim.path, e.dist), g.zone) <= st.zoneRadius && (!target || e.dist > target.dist)) target = e;
+      if (dist(e.pos, g.zone) <= st.zoneRadius && (!target || enemyThreat(sim, e) > enemyThreat(sim, target))) target = e;
     }
     if (!target) return;
     g.ammo--;

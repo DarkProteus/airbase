@@ -4,7 +4,8 @@ import { GameView } from './game/GameView';
 import { Hud } from './game/Hud';
 import './game/game.css';
 
-const MISSION = MISSIONS.sortie!;
+/** Миссия по умолчанию; до экрана выбора (TASK-17) другую можно открыть параметром адреса `?mission=<id>`. */
+const MISSION = MISSIONS[new URLSearchParams(location.search).get('mission') ?? ''] ?? MISSIONS.sortie!;
 
 export function App() {
   return (

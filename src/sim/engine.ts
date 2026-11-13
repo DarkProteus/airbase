@@ -1,4 +1,5 @@
 import { buyRejection, sellRefund, upgradeRejection, type RejectReason } from './economy';
+import { createObjective, objectiveOutcome, objectiveRoute, stepObjective, type ObjectiveState } from './objective';
 import { buildPath, pointAt, type PathData } from './path';
 import { rngNext } from './rng';
 import { createGroup, stepGroups, zoneRejection, type GroupState, type LineupEntry } from './sortie';
@@ -13,8 +14,10 @@ export interface EnemyState {
   type: string;
   hp: number;
   speed: number;
-  /** Пройденная дистанция по пути. */
+  /** Пройденная дистанция: по пути или, в миссии с целью, по прямой к цели. */
   dist: number;
+  /** Текущая позиция в клетках. */
+  pos: Vec2;
 }
 
 export interface UnitState {
@@ -29,6 +32,7 @@ export interface UnitState {
 export type SimEvent =
   | { type: 'waveStart'; wave: number }
   | { type: 'spawn'; enemy: number }
+  /** Враг дошёл: в миссии с целью урон идёт по прочности цели, без цели — по жизням базы. */
   | { type: 'leak'; enemy: number; damage: number }
   | { type: 'kill'; enemy: number; reward: number }
   | { type: 'shot'; unit: number; enemy: number; damage: number }
@@ -73,6 +77,8 @@ export interface SimState {
   units: UnitState[];
   /** Авиагруппы на вылете: состав задаётся при создании матча и в бою не меняется. */
   groups: GroupState[];
+  /** Цель миссии; нет — турельная миссия с путём и жизнями базы. */
+  objective?: ObjectiveState;
   /** События последнего тика. */
   events: SimEvent[];
 }
@@ -80,28 +86,37 @@ export interface SimState {
 export interface Sim {
   readonly mission: MissionConfig;
   readonly content: Content;
-  readonly path: PathData;
-  /** Расписание спавна по волнам: тик от старта волны, отсортировано. */
-  readonly waveSpawns: readonly (readonly { tick: number; enemy: string }[])[];
+  /** Путь врагов; нет в миссиях с целью. */
+  readonly path?: PathData;
+  /** Маршрут подвижной цели (escort). */
+  readonly route?: PathData;
+  /** Расписание спавна по волнам: тик от старта волны, отсортировано; at — точка появления. */
+  readonly waveSpawns: readonly (readonly { tick: number; enemy: string; at: Vec2 }[])[];
   state: SimState;
 }
 
 /** lineup — состав на вылет (группы, уровни, стартовые зоны); покупок групп в бою нет. */
 export function createSim(mission: MissionConfig, content: Content, seed: number, lineup: readonly LineupEntry[] = []): Sim {
   const groups = lineup.map((entry, i) => createGroup(mission, content, entry, i + 1));
+  const { objective } = mission;
+  if (!objective && !mission.path) throw new Error(`mission needs a path or an objective: ${mission.id}`);
+  const path = objective || !mission.path ? undefined : buildPath(mission.path);
   const waveSpawns = mission.waves.map((wave) => {
-    const spawns: { tick: number; enemy: string }[] = [];
+    const spawns: { tick: number; enemy: string; at: Vec2 }[] = [];
     for (const g of wave.groups) {
       if (!content.enemies[g.enemy]) throw new Error(`unknown enemy: ${g.enemy}`);
+      const at = path ? path.points[0]! : mission.spawns?.[g.spawn ?? 0];
+      if (!at) throw new Error(`unknown spawn point ${g.spawn ?? 0}: ${mission.id}`);
       for (let i = 0; i < g.count; i++)
-        spawns.push({ tick: Math.round(((g.delay ?? 0) + i * g.interval) * TICK_RATE), enemy: g.enemy });
+        spawns.push({ tick: Math.round(((g.delay ?? 0) + i * g.interval) * TICK_RATE), enemy: g.enemy, at });
     }
     return spawns.sort((a, b) => a.tick - b.tick);
   });
   return {
     mission,
     content,
-    path: buildPath(mission.path),
+    path,
+    route: objective && objectiveRoute(objective),
     waveSpawns,
     state: {
       tick: 0,
@@ -117,6 +132,7 @@ export function createSim(mission: MissionConfig, content: Content, seed: number
       enemies: [],
       units: [],
       groups,
+      ...(objective ? { objective: createObjective(objective) } : {}),
       events: [],
     },
   };
@@ -210,7 +226,7 @@ export function unitStats(sim: Sim, unit: UnitState): Stats {
 /** Эффективная скорость врага с учётом вражеских модификаторов юнитов (side: 'enemy'). */
 export function enemySpeed(sim: Sim, enemy: EnemyState): number {
   const tags = sim.content.enemies[enemy.type]!.tags;
-  const pos = pointAt(sim.path, enemy.dist);
+  const pos = enemy.pos;
   const mods: Modifier[] = [];
   for (const u of sim.state.units) {
     const from = sim.mission.slots[u.slot]!;
@@ -219,7 +235,16 @@ export function enemySpeed(sim: Sim, enemy: EnemyState): number {
   return mods.length ? (applyModifiers({ speed: enemy.speed }, mods).speed ?? enemy.speed) : enemy.speed;
 }
 
-/** Юниты стреляют по самому продвинутому врагу в радиусе; темп — fireRate выстрелов в секунду. */
+/** Радиус, с которого враг достаёт цель миссии, клеток. */
+export const OBJECTIVE_REACH = 0.3;
+
+/** Приоритет врага как мишени, больше — опаснее: ближе к цели миссии или дальше прошёл по пути. */
+export function enemyThreat(sim: Sim, e: EnemyState): number {
+  const o = sim.state.objective;
+  return o ? -Math.hypot(e.pos.x - o.pos.x, e.pos.y - o.pos.y) : e.dist;
+}
+
+/** Юниты стреляют по самому опасному врагу в радиусе (см. enemyThreat); темп — fireRate выстрелов в секунду. */
 function fire(sim: Sim): void {
   const s = sim.state;
   for (const u of s.units) {
@@ -230,8 +255,8 @@ function fire(sim: Sim): void {
     const pos = sim.mission.slots[u.slot]!;
     let target: EnemyState | undefined;
     for (const e of s.enemies) {
-      const p = pointAt(sim.path, e.dist);
-      if (Math.hypot(p.x - pos.x, p.y - pos.y) <= range && (!target || e.dist > target.dist)) target = e;
+      const p = e.pos;
+      if (Math.hypot(p.x - pos.x, p.y - pos.y) <= range && (!target || enemyThreat(sim, e) > enemyThreat(sim, target))) target = e;
     }
     if (!target) continue;
     s.events.push({ type: 'shot', unit: u.id, enemy: target.id, damage });
@@ -285,23 +310,41 @@ export function step(sim: Sim, commands: readonly Command[] = []): void {
     const cfg = sim.content.enemies[sp.enemy]!;
     const jitter = cfg.speedVar ? 1 + (rngNext(s) * 2 - 1) * cfg.speedVar : 1;
     const id = s.nextId++;
-    s.enemies.push({ id, type: cfg.id, hp: cfg.hp, speed: cfg.speed * jitter, dist: 0 });
+    s.enemies.push({ id, type: cfg.id, hp: cfg.hp, speed: cfg.speed * jitter, dist: 0, pos: { ...sp.at } });
     s.events.push({ type: 'spawn', enemy: id });
   }
 
   fire(sim);
   stepGroups(sim);
-  for (const e of s.enemies) e.dist += enemySpeed(sim, e) * DT;
+  const goal = s.objective;
+  if (goal) stepObjective(sim.mission.objective!, sim.route, goal);
   s.enemies = s.enemies.filter((e) => {
-    if (e.dist < sim.path.length) return true;
+    const stepLen = enemySpeed(sim, e) * DT;
+    e.dist += stepLen;
+    if (goal) {
+      // Наведение: каждый тик курс берётся на текущую позицию цели, поэтому за подвижной целью враг доворачивает.
+      const dx = goal.pos.x - e.pos.x;
+      const dy = goal.pos.y - e.pos.y;
+      const d = Math.hypot(dx, dy);
+      if (d > stepLen + OBJECTIVE_REACH) {
+        e.pos.x += (dx / d) * stepLen;
+        e.pos.y += (dy / d) * stepLen;
+        return true;
+      }
+    } else {
+      e.pos = pointAt(sim.path!, e.dist);
+      if (e.dist < sim.path!.length) return true;
+    }
     const damage = sim.content.enemies[e.type]!.leakDamage;
-    s.lives -= damage;
+    if (goal) goal.hp -= damage;
+    else s.lives -= damage;
     s.events.push({ type: 'leak', enemy: e.id, damage });
     return false;
   });
 
   s.tick++;
   s.phaseTick++;
-  if (s.lives <= 0) s.status = 'lost';
+  if (goal) s.status = objectiveOutcome(sim.mission.objective!, sim.route, goal) ?? 'running';
+  else if (s.lives <= 0) s.status = 'lost';
   else if (s.wave >= sim.mission.waves.length && spawnsDone(sim) && s.enemies.length === 0) s.status = 'won';
 }
