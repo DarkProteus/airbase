@@ -1,0 +1,14 @@
+.sound-toggle {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 10;
+  padding: 4px 10px;
+  font: 13px system-ui, sans-serif;
+  color: #dfe6ee;
+  background: #1b2230;
+  border: 1px solid #2c3750;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.sound-toggle[aria-pressed='true'] { color: #7d8aa6; }

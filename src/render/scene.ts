@@ -11,19 +11,25 @@ import {
   LineBasicMaterial,
   LineSegments,
   Mesh,
+  MeshBasicMaterial,
   MeshLambertMaterial,
   OrthographicCamera,
   Scene,
   SphereGeometry,
+  Vector3,
   WebGLRenderer,
 } from 'three';
-import type { Material, Object3D } from 'three';
+import type { Material } from 'three';
 import { visualOf } from '../ui/entity/model';
 import type { PreviewShape } from '../ui/entity/model';
-import { buildPath, pointAt } from '../sim';
-import type { Content, MissionConfig, SimState } from '../sim';
+import { buildPath, DT, pointAt } from '../sim';
+import type { Content, MissionConfig, SimState, VisualConfig } from '../sim';
 import { cellToWorld, fitView, ISO_FORWARD, pickCell, slotIndexAt } from './coords';
 import type { IsoView } from './coords';
+import { dyingScale, effectProgress, planEffects, recoilScale } from './effects';
+import type { EffectSpec, Vec3 } from './effects';
+import { retarget, tweenDuration, tweenValue } from './motion';
+import type { Tween } from './motion';
 
 /**
  * Three.js-сцена карты. Строится целиком из MissionConfig (сетка, путь, слоты) и Content (облик сущностей),
@@ -53,12 +59,6 @@ const COLORS = {
 };
 
 const CAMERA_DISTANCE = 40;
-
-/** CSS-цвет из visualOf ('hsl(h s% l%)') -> three.Color; Color.setStyle не понимает пробельный синтаксис. */
-function cssColor(css: string): Color {
-  const m = /^hsl\(\s*([\d.]+)[\s,]+([\d.]+)%[\s,]+([\d.]+)%\s*\)$/.exec(css);
-  return m ? new Color().setHSL(Number(m[1]) / 360, Number(m[2]) / 100, Number(m[3]) / 100) : new Color(css);
-}
 
 function shapeGeometry(shape: PreviewShape): BufferGeometry {
   switch (shape) {
@@ -157,21 +157,100 @@ export function createScene(
   // --- динамика: сущности снапшота ---
   const geoCache = new Map<PreviewShape, BufferGeometry>();
   const matCache = new Map<string, Material>();
-  const bodyMesh = (entity: { role?: string; tags: readonly string[] }, scale: number) => {
+  const bodyMesh = (entity: { role?: string; tags: readonly string[]; visual?: VisualConfig }) => {
     const v = visualOf(entity);
     let geo = geoCache.get(v.shape);
     if (!geo) geoCache.set(v.shape, (geo = shapeGeometry(v.shape)));
     let mat = matCache.get(v.color);
-    if (!mat) matCache.set(v.color, (mat = new MeshLambertMaterial({ color: cssColor(v.color) })));
+    if (!mat) matCache.set(v.color, (mat = new MeshLambertMaterial({ color: new Color(v.color) })));
     const m = new Mesh(geo, mat);
-    m.scale.setScalar(v.size * scale);
-    return { mesh: m, lift: v.flying ? 0.9 : 0 };
+    m.scale.setScalar(v.size);
+    return { mesh: m, lift: v.altitude, scale: v.size };
   };
 
-  const enemyMeshes = new Map<number, { obj: Object3D; lift: number }>();
-  const unitMeshes = new Map<number, Object3D>();
+  interface EnemyEntry {
+    mesh: Mesh;
+    lift: number;
+    scale: number;
+    dist: Tween;
+  }
+  interface UnitEntry {
+    mesh: Mesh;
+    scale: number;
+    pos: Vec3;
+    recoilStart: number;
+  }
+  interface Dying {
+    mesh: Mesh;
+    scale: number;
+    start: number;
+  }
+  const enemies = new Map<number, EnemyEntry>();
+  const units = new Map<number, UnitEntry>();
+  const dying: Dying[] = [];
+  const live: { spec: EffectSpec; obj: Mesh; mat: MeshBasicMaterial; start: number }[] = [];
   const dynamic = new Group();
   scene.add(dynamic);
+  const baseWorld = cellToWorld(last, size, 0.4);
+  const clock = () => performance.now();
+  const DYING_MS = 320;
+  const RECOIL_MS = 140;
+
+  // Эффекты: общие единичные геометрии, материал на эффект (гаснет по прозрачности) — освобождается по окончании.
+  const tracerGeo = new CylinderGeometry(0.06, 0.06, 1, 6);
+  const burstGeo = new SphereGeometry(1, 12, 8);
+  const UP = new Vector3(0, 1, 0);
+
+  const enemyWorld = (e: EnemyEntry, now: number): Vec3 =>
+    cellToWorld(pointAt(path, tweenValue(e.dist, now)), size, e.lift);
+
+  const spawnEffect = (spec: EffectSpec, now: number) => {
+    const mat = new MeshBasicMaterial({ color: spec.color, transparent: true, depthWrite: false });
+    const obj = new Mesh(spec.kind === 'tracer' ? tracerGeo : burstGeo, mat);
+    if (spec.kind === 'tracer') {
+      const dir = new Vector3(spec.to.x - spec.from.x, spec.to.y - spec.from.y, spec.to.z - spec.from.z);
+      const len = dir.length();
+      obj.position.set((spec.from.x + spec.to.x) / 2, (spec.from.y + spec.to.y) / 2, (spec.from.z + spec.to.z) / 2);
+      if (len > 1e-6) obj.quaternion.setFromUnitVectors(UP, dir.divideScalar(len));
+      obj.scale.set(1, len, 1);
+    } else {
+      obj.position.set(spec.at.x, spec.at.y, spec.at.z);
+    }
+    dynamic.add(obj);
+    live.push({ spec, obj, mat, start: now });
+  };
+
+  /** Анимации по времени: движение врагов, отдача юнитов, гибель, эффекты. */
+  const animate = (now: number) => {
+    for (const e of enemies.values()) {
+      const p = enemyWorld(e, now);
+      e.mesh.position.set(p.x, p.y, p.z);
+    }
+    for (const u of units.values()) {
+      const k = effectProgress(u.recoilStart, RECOIL_MS, now);
+      u.mesh.scale.setScalar(u.scale * (k === null ? 1 : recoilScale(k)));
+    }
+    for (let i = dying.length - 1; i >= 0; i--) {
+      const d = dying[i]!;
+      const k = effectProgress(d.start, DYING_MS, now);
+      if (k === null) {
+        dynamic.remove(d.mesh);
+        dying.splice(i, 1);
+      } else d.mesh.scale.setScalar(Math.max(1e-3, d.scale * dyingScale(k)));
+    }
+    for (let i = live.length - 1; i >= 0; i--) {
+      const f = live[i]!;
+      const k = effectProgress(f.start, f.spec.ttl, now);
+      if (k === null) {
+        dynamic.remove(f.obj);
+        f.mat.dispose();
+        live.splice(i, 1);
+      } else if (f.spec.kind === 'burst') {
+        f.obj.scale.setScalar(f.spec.radius * (0.35 + 0.65 * k));
+        f.mat.opacity = 0.9 * (1 - k);
+      } else f.mat.opacity = 1 - k;
+    }
+  };
 
   let hovered = -1;
   const setHover = (i: number) => {
@@ -216,49 +295,93 @@ export function createScene(
   el.addEventListener('pointerleave', onLeave);
   el.addEventListener('pointerup', onClick);
 
+  let lastTick = -1;
   const update = (state: SimState) => {
+    const now = clock();
+    // Движение растягивается ровно на тики между снапшотами (но не больше 8: после паузы вкладки не «ползём»).
+    const duration = tweenDuration(Math.min(8, Math.max(1, state.tick - lastTick)), DT);
+    const isNew = state.tick !== lastTick;
+
     const seenEnemies = new Set<number>();
     for (const e of state.enemies) {
       seenEnemies.add(e.id);
-      let entry = enemyMeshes.get(e.id);
+      let entry = enemies.get(e.id);
       if (!entry) {
         const cfg = content.enemies[e.type];
-        const { mesh, lift } = bodyMesh({ tags: cfg?.tags ?? [e.type] }, 0.8);
+        const { mesh, lift, scale } = bodyMesh({ tags: cfg?.tags ?? [e.type], visual: cfg?.visual });
         dynamic.add(mesh);
-        entry = { obj: mesh, lift };
-        enemyMeshes.set(e.id, entry);
-      }
-      const p = cellToWorld(pointAt(path, e.dist), size, entry.lift);
-      entry.obj.position.set(p.x, p.y, p.z);
+        entry = { mesh, lift, scale, dist: retarget(undefined, e.dist, now, 0) };
+        enemies.set(e.id, entry);
+      } else if (isNew) entry.dist = retarget(entry.dist, e.dist, now, duration);
     }
-    for (const [id, entry] of enemyMeshes)
-      if (!seenEnemies.has(id)) {
-        dynamic.remove(entry.obj);
-        enemyMeshes.delete(id);
-      }
 
     const seenUnits = new Set<number>();
     for (const u of state.units) {
       seenUnits.add(u.id);
-      if (unitMeshes.has(u.id)) continue;
+      if (units.has(u.id)) continue;
       const cfg = content.units[u.type];
       const slot = mission.slots[u.slot];
       if (!cfg || !slot) continue;
-      const { mesh, lift } = bodyMesh({ role: cfg.role, tags: cfg.tags }, 1);
+      const { mesh, lift, scale } = bodyMesh({ role: cfg.role, tags: cfg.tags, visual: cfg.visual });
       const p = cellToWorld(slot, size, 0.08 + lift);
       mesh.position.set(p.x, p.y, p.z);
       dynamic.add(mesh);
-      unitMeshes.set(u.id, mesh);
+      units.set(u.id, { mesh, scale, pos: p, recoilStart: -1e9 });
     }
-    for (const [id, obj] of unitMeshes)
-      if (!seenUnits.has(id)) {
-        dynamic.remove(obj);
-        unitMeshes.delete(id);
+
+    // События снапшота -> эффекты; позиции врагов берутся до их удаления из сцены.
+    if (isNew) {
+      const plan = planEffects(state.events, {
+        unitPos: (id) => units.get(id)?.pos,
+        enemyPos: (id) => {
+          const e = enemies.get(id);
+          return e && enemyWorld(e, now);
+        },
+        basePos: baseWorld,
+      });
+      for (const spec of plan.effects) spawnEffect(spec, now);
+      for (const id of plan.fired) {
+        const u = units.get(id);
+        if (u) u.recoilStart = now;
       }
+      for (const id of plan.killed) {
+        const e = enemies.get(id);
+        if (!e) continue;
+        const p = enemyWorld(e, now);
+        e.mesh.position.set(p.x, p.y, p.z);
+        dying.push({ mesh: e.mesh, scale: e.scale, start: now });
+        enemies.delete(id);
+      }
+    }
+    lastTick = state.tick;
+
+    for (const [id, entry] of enemies)
+      if (!seenEnemies.has(id)) {
+        dynamic.remove(entry.mesh);
+        enemies.delete(id);
+      }
+    for (const [id, entry] of units)
+      if (!seenUnits.has(id)) {
+        dynamic.remove(entry.mesh);
+        units.delete(id);
+      }
+    animate(now);
     draw();
   };
 
+  // Непрерывный цикл: плавное движение между тиками и эффекты не зависят от частоты снапшотов.
+  let raf = 0;
+  const loop = () => {
+    raf = requestAnimationFrame(loop);
+    animate(clock());
+    draw();
+  };
+  raf = requestAnimationFrame(loop);
+
   const dispose = () => {
+    cancelAnimationFrame(raf);
+    for (const f of live) f.mat.dispose();
+    live.length = 0;
     ro.disconnect();
     el.removeEventListener('pointermove', onMove);
     el.removeEventListener('pointerleave', onLeave);
@@ -270,6 +393,8 @@ export function createScene(
         for (const x of Array.isArray(m) ? m : [m]) x.dispose();
       }
     });
+    tracerGeo.dispose();
+    burstGeo.dispose();
     for (const g of geoCache.values()) g.dispose();
     for (const m of matCache.values()) m.dispose();
     hoverMat.dispose();

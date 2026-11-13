@@ -18,7 +18,7 @@ export function UnitCard({ unit, view = viewUnit(unit), onClick }: Props) {
   const statKeys = Object.keys({ ...view.baseStats, ...view.stats }) as (keyof typeof view.stats)[];
   return (
     <article className="card" data-testid="unit-card" data-id={unit.id} onClick={onClick}>
-      <EntityPreview entity={{ role: unit.role, tags: view.tags }} />
+      <EntityPreview entity={{ role: unit.role, tags: view.tags, visual: unit.visual }} />
       <div className="card-body">
         <h3>
           {unit.name} <small>{unit.role}</small>

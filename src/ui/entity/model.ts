@@ -1,5 +1,5 @@
 import { applyModifiers } from '../../sim';
-import type { Modifier, Stats, UnitConfig } from '../../sim';
+import type { Modifier, Stats, UnitConfig, VisualConfig, VisualShape } from '../../sim';
 
 /** Чистая логика отображения сущностей: без React, без three. Строится только из конфигов. */
 
@@ -8,8 +8,8 @@ export interface FieldRow {
   value: string;
 }
 
-/** Поля, которые карточка показывает отдельно (заголовок), а не строкой. */
-const HEADER_KEYS = new Set(['id', 'name']);
+/** Поля, которые карточка показывает отдельно (заголовок, превью), а не строкой. */
+const HEADER_KEYS = new Set(['id', 'name', 'visual']);
 
 function formatValue(v: unknown): string {
   if (v === null || v === undefined) return '—';
@@ -95,15 +95,20 @@ export function formatModifier(m: Modifier): string {
   return `${m.side === 'enemy' ? 'враги: ' : ''}${m.stat} ${val}${scope}${tags}`;
 }
 
-export type PreviewShape = 'cube' | 'cylinder' | 'pyramid' | 'sphere';
+export type PreviewShape = VisualShape;
+
+/** Высота полёта по умолчанию для сущностей с тегом air, клеток. */
+export const DEFAULT_ALTITUDE = 0.9;
 
 export interface Visual {
   shape: PreviewShape;
-  /** CSS-цвет, детерминированно от роли/тегов. */
+  /** Цвет '#rrggbb' — годится и для CSS, и для THREE.Color. */
   color: string;
-  /** Парит над землёй (тег air). */
+  /** Парит над землёй (altitude > 0). */
   flying: boolean;
-  /** Относительный размер 0.7..1.3. */
+  /** Высота полёта в клетках (0 для наземных). */
+  altitude: number;
+  /** Относительный размер: scale из конфига или 0.7..1.3 для запасного варианта. */
   size: number;
 }
 
@@ -119,20 +124,36 @@ export function hashString(s: string): number {
   return h >>> 0;
 }
 
+/** HSL (h в градусах, s и l в долях) -> '#rrggbb'. */
+export function hslToHex(h: number, s: number, l: number): string {
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    return Math.round(c * 255)
+      .toString(16)
+      .padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
 /**
- * Превью из имеющихся данных: цвет и форма — от роли (если есть) и тегов, парение — от тега air.
- * Визуальных полей в конфигах нет; если понадобятся — добавлять в UnitConfig/EnemyConfig отдельной задачей.
+ * Единый источник «конфиг -> визуал» для сцены и превью галереи.
+ * Берёт entity.visual; запасной вариант (если поля нет) — форма и цвет от роли и тегов.
  */
-export function visualOf(entity: { role?: string; tags: readonly string[] }): Visual {
+export function visualOf(entity: { role?: string; tags: readonly string[]; visual?: VisualConfig }): Visual {
   const tags = [...entity.tags].sort();
+  const v = entity.visual;
+  const altitude = Math.max(0, v?.altitude ?? (tags.includes('air') ? DEFAULT_ALTITUDE : 0));
+  if (v) return { shape: v.shape, color: v.color, flying: altitude > 0, altitude, size: v.scale ?? 1 };
   const key = entity.role ?? tags.join('+');
   const h = hashString(key);
-  const hue = h % 360;
   const th = hashString(tags.join('+'));
   return {
     shape: SHAPES[th % SHAPES.length] ?? 'cube',
-    color: `hsl(${hue} 65% 55%)`,
-    flying: tags.includes('air'),
+    color: hslToHex(h % 360, 0.65, 0.55),
+    flying: altitude > 0,
+    altitude,
     size: 0.7 + ((h >>> 9) % 61) / 100,
   };
 }

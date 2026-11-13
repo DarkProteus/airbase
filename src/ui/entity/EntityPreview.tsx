@@ -1,9 +1,10 @@
+import type { VisualConfig } from '../../sim';
 import { visualOf } from './model';
 import type { Visual } from './model';
 
 interface Props {
   /** Любая сущность с тегами (юнит с ролью, враг). Всё берётся из конфига. */
-  entity: { role?: string; tags: readonly string[] };
+  entity: { role?: string; tags: readonly string[]; visual?: VisualConfig };
   size?: number;
 }
 
@@ -53,15 +54,15 @@ function Body({ v }: { v: Visual }) {
   }
 }
 
-/** Превью сущности из конфига: цвет/форма от роли и тегов, air — парит над тенью. */
-export function EntityPreview({ entity, size = 96 }: Props) {
+/** Превью сущности из конфига (visual): форма, цвет, масштаб и высота полёта те же, что в сцене. */
+export function EntityPreview({ entity, size = 128 }: Props) {
   const v = visualOf(entity);
-  const lift = v.flying ? 22 : 0;
+  const lift = v.altitude * 24;
   return (
     <svg
       width={size}
       height={size}
-      viewBox="-50 -60 100 100"
+      viewBox="-75 -90 150 150"
       role="img"
       aria-label={`${v.shape} ${v.flying ? 'air' : 'ground'}`}
       data-shape={v.shape}

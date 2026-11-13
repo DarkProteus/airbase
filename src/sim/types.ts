@@ -21,6 +21,20 @@ export interface Modifier {
   tags?: string[];
 }
 
+/** Примитив модели: рендерер и превью галереи строят одну и ту же форму. */
+export type VisualShape = 'cube' | 'cylinder' | 'pyramid' | 'sphere';
+
+/** Визуал сущности как данные. Симуляция его не читает. */
+export interface VisualConfig {
+  shape: VisualShape;
+  /** Цвет '#rrggbb' — понимают и CSS, и three.Color. */
+  color: string;
+  /** Относительный размер, 1 = обычный. */
+  scale?: number;
+  /** Высота полёта над землёй в клетках; по умолчанию 0,9 для тега air и 0 для остальных. */
+  altitude?: number;
+}
+
 export interface UnitConfig {
   id: string;
   name: string;
@@ -32,6 +46,8 @@ export interface UnitConfig {
   modifiers: Modifier[];
   /** Уровни улучшения: каждый добавляет свои модификаторы. */
   upgrades: { cost: number; modifiers: Modifier[] }[];
+  /** Облик; без него рендерер берёт запасной примитив из роли/тегов. */
+  visual?: VisualConfig;
 }
 
 export interface EnemyConfig {
@@ -46,6 +62,8 @@ export interface EnemyConfig {
   /** Сколько жизней базы отнимает при прорыве. */
   leakDamage: number;
   tags: string[];
+  /** Облик; без него рендерер берёт запасной примитив из тегов. */
+  visual?: VisualConfig;
 }
 
 export interface WaveGroup {

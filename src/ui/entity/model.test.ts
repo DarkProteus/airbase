@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import type { Modifier, UnitConfig } from '../../sim';
-import { describeFields, viewUnit, visualOf } from './model';
+import { ENEMIES, UNITS } from '../../content';
+import { describeFields, hslToHex, viewUnit, visualOf } from './model';
 
 const aura: Modifier = { stat: 'damage', op: 'add', value: 5, scope: 'aura', radius: 2, tags: ['air'] };
 
@@ -79,4 +80,30 @@ test('свои ауры и вражеские модификаторы не ме
   expect(viewUnit(unit).appliedModifiers).toHaveLength(2);
   // Та же аура от союзника — применяется; вражеский модификатор — нет.
   expect(viewUnit(unit, 0, unit.modifiers).stats).toEqual({ fireRate: 2 });
+});
+
+test('visualOf берёт форму, цвет, масштаб и высоту из visual конфига; теги влияют только на запасной вариант', () => {
+  const v = visualOf({ tags: ['ground'], visual: { shape: 'sphere', color: '#112233', scale: 1.5, altitude: 2 } });
+  expect(v).toEqual({ shape: 'sphere', color: '#112233', size: 1.5, altitude: 2, flying: true });
+  // Без altitude: air парит на высоте по умолчанию, наземный — нет; scale по умолчанию 1.
+  expect(visualOf({ tags: ['air'], visual: { shape: 'cube', color: '#000000' } })).toMatchObject({ altitude: 0.9, flying: true, size: 1 });
+  expect(visualOf({ tags: [], visual: { shape: 'cube', color: '#000000' } })).toMatchObject({ altitude: 0, flying: false });
+});
+
+test('запасной визуал отдаёт цвет в #rrggbb (годится и CSS, и THREE.Color)', () => {
+  expect(visualOf({ role: 'x', tags: ['air'] }).color).toMatch(/^#[0-9a-f]{6}$/);
+  expect(hslToHex(0, 1, 0.5)).toBe('#ff0000');
+  expect(hslToHex(120, 1, 0.5)).toBe('#00ff00');
+  expect(hslToHex(240, 1, 0.5)).toBe('#0000ff');
+});
+
+test('весь контент задаёт visual явно: корректный цвет, масштаб > 0, юниты различимы формой или цветом', () => {
+  const all = [...Object.values(UNITS), ...Object.values(ENEMIES)];
+  for (const c of all) {
+    expect(c.visual, c.id).toBeDefined();
+    expect(c.visual!.color, c.id).toMatch(/^#[0-9a-f]{6}$/);
+    expect(c.visual!.scale ?? 1, c.id).toBeGreaterThan(0);
+  }
+  const sigs = all.map((c) => `${c.visual!.shape}/${c.visual!.color}`);
+  expect(new Set(sigs).size).toBe(all.length);
 });

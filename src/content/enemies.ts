@@ -9,6 +9,7 @@ const drone: EnemyConfig = {
   reward: 10,
   leakDamage: 1,
   tags: ['air', 'light'],
+  visual: { shape: 'sphere', color: '#ee5a4a', scale: 0.6 },
 };
 
 const runner: EnemyConfig = {
@@ -20,6 +21,7 @@ const runner: EnemyConfig = {
   reward: 6,
   leakDamage: 1,
   tags: ['air', 'light', 'fast'],
+  visual: { shape: 'pyramid', color: '#f5a524', scale: 0.55 },
 };
 
 const tank: EnemyConfig = {
@@ -30,6 +32,7 @@ const tank: EnemyConfig = {
   reward: 30,
   leakDamage: 3,
   tags: ['ground', 'armored'],
+  visual: { shape: 'cube', color: '#9a7b52', scale: 0.9 },
 };
 
 const bomber: EnemyConfig = {
@@ -40,6 +43,7 @@ const bomber: EnemyConfig = {
   reward: 150,
   leakDamage: 10,
   tags: ['air', 'heavy', 'boss'],
+  visual: { shape: 'cylinder', color: '#d1366b', scale: 1.7, altitude: 1.2 },
 };
 
 export const ENEMIES: Record<string, EnemyConfig> = {
