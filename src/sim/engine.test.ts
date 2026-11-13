@@ -24,7 +24,7 @@ const mission = (over: Partial<MissionConfig> = {}): MissionConfig => ({
   slots: [{ x: 1, y: 1 }, { x: 2, y: 1 }],
   startMoney: 150,
   baseLives: 5,
-  waves: [{ at: 1, groups: [{ enemy: 'e', count: 3, interval: 0.5 }] }],
+  waves: [{ prep: 1, groups: [{ enemy: 'e', count: 3, interval: 0.5 }] }],
   ...over,
 });
 
@@ -53,22 +53,25 @@ describe('волны', () => {
     expect(spawnTicks).toEqual([1, 1.5, 2].map((s) => s * TICK_RATE));
   });
 
-  test('несколько групп и волн сливаются в одно расписание', () => {
+  test('группы волны сливаются в расписание волны, смещения от старта волны', () => {
     const sim = createSim(
       mission({
         waves: [
-          { at: 0, groups: [{ enemy: 'e', count: 2, interval: 1 }, { enemy: 'j', count: 1, interval: 0, delay: 0.5 }] },
-          { at: 3, groups: [{ enemy: 'j', count: 1, interval: 0 }] },
+          { prep: 0, groups: [{ enemy: 'e', count: 2, interval: 1 }, { enemy: 'j', count: 1, interval: 0, delay: 0.5 }] },
+          { prep: 3, groups: [{ enemy: 'j', count: 1, interval: 0 }] },
         ],
       }),
       content,
       1,
     );
-    expect(sim.schedule.map((s) => [s.tick / TICK_RATE, s.enemy])).toEqual([[0, 'e'], [0.5, 'j'], [1, 'e'], [3, 'j']]);
+    expect(sim.waveSpawns.map((w) => w.map((s) => [s.tick / TICK_RATE, s.enemy]))).toEqual([
+      [[0, 'e'], [0.5, 'j'], [1, 'e']],
+      [[0, 'j']],
+    ]);
   });
 
   test('неизвестный враг в волне — ошибка при создании', () => {
-    expect(() => createSim(mission({ waves: [{ at: 0, groups: [{ enemy: 'nope', count: 1, interval: 0 }] }] }), content, 1)).toThrow();
+    expect(() => createSim(mission({ waves: [{ prep: 0, groups: [{ enemy: 'nope', count: 1, interval: 0 }] }] }), content, 1)).toThrow();
   });
 });
 
@@ -82,7 +85,7 @@ describe('путь', () => {
   });
 
   test('враг идёт по пути и при достижении конца отнимает жизни базы', () => {
-    const sim = createSim(mission({ waves: [{ at: 0, groups: [{ enemy: 'e', count: 1, interval: 0 }] }] }), content, 1);
+    const sim = createSim(mission({ waves: [{ prep: 0, groups: [{ enemy: 'e', count: 1, interval: 0 }] }] }), content, 1);
     run(sim, TICK_RATE);
     expect(sim.state.enemies[0]!.dist).toBeCloseTo(2, 9);
     expect(sim.state.lives).toBe(5);
@@ -125,7 +128,7 @@ describe('деньги', () => {
   });
 
   test('награда за убийство; победа после зачистки последней волны', () => {
-    const sim = createSim(mission({ waves: [{ at: 0, groups: [{ enemy: 'e', count: 1, interval: 0 }] }] }), content, 1);
+    const sim = createSim(mission({ waves: [{ prep: 0, groups: [{ enemy: 'e', count: 1, interval: 0 }] }] }), content, 1);
     step(sim);
     const id = sim.state.enemies[0]!.id;
     expect(damageEnemy(sim, id, 4)).toBe(false);
@@ -139,7 +142,7 @@ describe('деньги', () => {
 
 describe('детерминизм', () => {
   const play = (seed: number) => {
-    const sim = createSim(mission({ waves: [{ at: 0, groups: [{ enemy: 'j', count: 4, interval: 0.3 }] }] }), content, seed);
+    const sim = createSim(mission({ waves: [{ prep: 0, groups: [{ enemy: 'j', count: 4, interval: 0.3 }] }] }), content, seed);
     step(sim, [{ type: 'buy', unit: 'u', slot: 1 }]);
     run(sim, 2 * TICK_RATE);
     return snapshot(sim);

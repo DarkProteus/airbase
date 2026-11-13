@@ -22,6 +22,7 @@ export interface UnitState {
 }
 
 export type SimEvent =
+  | { type: 'waveStart'; wave: number }
   | { type: 'spawn'; enemy: number }
   | { type: 'leak'; enemy: number; damage: number }
   | { type: 'kill'; enemy: number; reward: number }
@@ -36,6 +37,13 @@ export interface SimState {
   money: number;
   lives: number;
   status: 'running' | 'won' | 'lost';
+  /** Сколько волн уже стартовало (индекс следующей волны). */
+  wave: number;
+  /** prep — подготовка к волне `wave`; wave — идёт спавн/бой волны `wave - 1`. */
+  phase: 'prep' | 'wave';
+  /** Тиков с начала текущей фазы. */
+  phaseTick: number;
+  /** Индекс следующего спавна в текущей волне. */
   nextSpawn: number;
   nextId: number;
   enemies: EnemyState[];
@@ -48,31 +56,35 @@ export interface Sim {
   readonly mission: MissionConfig;
   readonly content: Content;
   readonly path: PathData;
-  /** Плоское расписание спавна, отсортировано по тику. */
-  readonly schedule: readonly { tick: number; enemy: string }[];
+  /** Расписание спавна по волнам: тик от старта волны, отсортировано. */
+  readonly waveSpawns: readonly (readonly { tick: number; enemy: string }[])[];
   state: SimState;
 }
 
 export function createSim(mission: MissionConfig, content: Content, seed: number): Sim {
-  const schedule: { tick: number; enemy: string }[] = [];
-  for (const wave of mission.waves)
+  const waveSpawns = mission.waves.map((wave) => {
+    const spawns: { tick: number; enemy: string }[] = [];
     for (const g of wave.groups) {
       if (!content.enemies[g.enemy]) throw new Error(`unknown enemy: ${g.enemy}`);
       for (let i = 0; i < g.count; i++)
-        schedule.push({ tick: Math.round((wave.at + (g.delay ?? 0) + i * g.interval) * TICK_RATE), enemy: g.enemy });
+        spawns.push({ tick: Math.round(((g.delay ?? 0) + i * g.interval) * TICK_RATE), enemy: g.enemy });
     }
-  schedule.sort((a, b) => a.tick - b.tick);
+    return spawns.sort((a, b) => a.tick - b.tick);
+  });
   return {
     mission,
     content,
     path: buildPath(mission.path),
-    schedule,
+    waveSpawns,
     state: {
       tick: 0,
       rng: seed >>> 0,
       money: mission.startMoney,
       lives: mission.baseLives,
       status: 'running',
+      wave: 0,
+      phase: 'prep',
+      phaseTick: 0,
       nextSpawn: 0,
       nextId: 1,
       enemies: [],
@@ -115,14 +127,37 @@ export function damageEnemy(sim: Sim, enemyId: number, amount: number): boolean 
   return true;
 }
 
+/** Текущая волна идёт и все её спавны выполнены. */
+const spawnsDone = (sim: Sim): boolean =>
+  sim.state.phase === 'wave' && sim.state.nextSpawn >= (sim.waveSpawns[sim.state.wave - 1]?.length ?? 0);
+
+/** Переходы между фазами по правилу старта следующей волны из конфига. */
+function advancePhase(sim: Sim): void {
+  const s = sim.state;
+  const next = sim.mission.waves[s.wave];
+  if (!next) return;
+  if (spawnsDone(sim) && ((next.start ?? 'timer') === 'timer' || s.enemies.length === 0)) {
+    s.phase = 'prep';
+    s.phaseTick = 0;
+  }
+  if (s.phase === 'prep' && s.phaseTick >= Math.round(next.prep * TICK_RATE)) {
+    s.phase = 'wave';
+    s.phaseTick = 0;
+    s.nextSpawn = 0;
+    s.events.push({ type: 'waveStart', wave: s.wave++ });
+  }
+}
+
 /** Один фиксированный шаг симуляции. */
 export function step(sim: Sim, commands: readonly Command[] = []): void {
   const s = sim.state;
   if (s.status !== 'running') return;
   s.events = [];
   for (const c of commands) applyCommand(sim, c);
+  advancePhase(sim);
 
-  for (let sp = sim.schedule[s.nextSpawn]; sp && sp.tick <= s.tick; sp = sim.schedule[++s.nextSpawn]) {
+  const spawns = sim.waveSpawns[s.wave - 1] ?? [];
+  for (let sp = s.phase === 'wave' ? spawns[s.nextSpawn] : undefined; sp && sp.tick <= s.phaseTick; sp = spawns[++s.nextSpawn]) {
     const cfg = sim.content.enemies[sp.enemy]!;
     const jitter = cfg.speedVar ? 1 + (rngNext(s) * 2 - 1) * cfg.speedVar : 1;
     const id = s.nextId++;
@@ -140,6 +175,7 @@ export function step(sim: Sim, commands: readonly Command[] = []): void {
   });
 
   s.tick++;
+  s.phaseTick++;
   if (s.lives <= 0) s.status = 'lost';
-  else if (s.nextSpawn >= sim.schedule.length && s.enemies.length === 0) s.status = 'won';
+  else if (s.wave >= sim.mission.waves.length && spawnsDone(sim) && s.enemies.length === 0) s.status = 'won';
 }
