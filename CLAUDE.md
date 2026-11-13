@@ -22,3 +22,32 @@ Do not edit Backlog task, draft, document, decision, or milestone markdown files
 
 </CRITICAL_INSTRUCTION>
 <!-- BACKLOG.MD GUIDELINES END -->
+
+## AIRBASE: правила проекта
+
+Дизайн: `docs/design.md`. Стек: TS + Vite, Three.js, React, Zustand, Vitest, npm.
+
+```
+src/sim      чистая логика матча (типы, движок, RNG) — headless
+src/content  контент как данные: юниты, враги, миссии (TS-конфиги + реестры)
+src/render   Three.js: изометрия, фикс. камера; читает снапшот sim
+src/ui       React: универсальные компоненты, строятся из конфигов
+src/store    Zustand: только UI-состояние и снапшот sim, без логики
+```
+
+- **Sim отдельно от рендера.** В `src/sim` запрещены импорты three/react/zustand и
+  слоёв render/ui/store (сторожит `src/sim/purity.test.ts`). Мутации матча — только
+  командами sim; store и UI логики не содержат.
+- **Контент = данные.** Юнит — `UnitConfig`, синергии — теги + `Modifier`. Никаких
+  ветвлений по id юнита в движке; карточки и рендер — универсальные, из конфига.
+  Сначала переиспользуй существующее, потом пиши новое.
+- **Детерминизм.** Фиксированный шаг тика, сидированный RNG из `src/sim/rng.ts`.
+  В sim нельзя `Math.random`, `Date.now`, `performance.now`; время в тиках.
+- **Тесты.** `npm run check` (= `tsc --noEmit` + `vitest run`) — перед каждым
+  коммитом, его же запускает pre-commit hook. Один файл: `npx vitest run <путь>`.
+  Логика sim покрывается тестами рядом с кодом (`*.test.ts`).
+- **Поиск по коду.** codebase-memory MCP (символы, вызовы, архитектура) и
+  `ast-grep` (`ast-grep -p '<шаблон>' src`); не читай файлы целиком ради поиска.
+- **Правки.** Существующие файлы — точечно, не переписывай целиком.
+- **Коммит после каждой задачи** Backlog: `TASK-N: <что сделано>`, статус Done —
+  только после проверки критериев приёмки.
