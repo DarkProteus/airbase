@@ -14,6 +14,7 @@ const proto: MissionConfig = {
     { x: 5, y: 6 },
     { x: 8, y: 8 },
   ],
+  size: { w: 13, h: 11 },
   startMoney: 250,
   baseLives: 10,
   waves: [
@@ -28,6 +29,7 @@ const sortie: MissionConfig = {
   name: 'Вылет',
   path: proto.path,
   slots: proto.slots,
+  size: { w: 13, h: 11 },
   startMoney: 300,
   baseLives: 20,
   waves: [

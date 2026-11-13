@@ -73,6 +73,8 @@ export interface Wave {
 export interface MissionConfig {
   id: string;
   name: string;
+  /** Размер сетки карты в клетках: x ∈ [0, w), y ∈ [0, h). */
+  size: { w: number; h: number };
   /** Полилиния пути врагов в клетках. */
   path: Vec2[];
   /** Клетки, куда можно ставить юниты. */

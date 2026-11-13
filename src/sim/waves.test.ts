@@ -14,6 +14,7 @@ const mission = (waves: Wave[], over: Partial<MissionConfig> = {}): MissionConfi
   name: 'M',
   path: [{ x: 0, y: 0 }, { x: 20, y: 0 }],
   slots: [],
+  size: { w: 21, h: 11 },
   startMoney: 0,
   baseLives: 10,
   waves,

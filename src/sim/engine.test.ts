@@ -22,6 +22,7 @@ const mission = (over: Partial<MissionConfig> = {}): MissionConfig => ({
     { x: 4, y: 4 },
   ],
   slots: [{ x: 1, y: 1 }, { x: 2, y: 1 }],
+  size: { w: 21, h: 11 },
   startMoney: 150,
   baseLives: 5,
   waves: [{ prep: 1, groups: [{ enemy: 'e', count: 3, interval: 0.5 }] }],
