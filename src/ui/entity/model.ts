@@ -72,16 +72,16 @@ export function viewUnit(
 ): UnitView {
   const lv = clampLevel(unit, level);
   const tags = [...new Set([...unit.tags, ...extraTags])];
-  const applied = [
-    ...unitModifiersAtLevel(unit, lv),
-    ...extraModifiers.filter((m) => modifierMatchesTags(m, tags)),
-  ];
+  // Как в sim: на свои статы действуют только self-модификаторы; ауры/global и side: 'enemy' — на других.
+  const own = unitModifiersAtLevel(unit, lv);
+  const external = extraModifiers.filter((m) => m.side !== 'enemy' && modifierMatchesTags(m, tags));
+  const applied = [...own, ...external];
   return {
     level: lv,
     maxLevel: maxUpgradeLevel(unit),
     tags,
     baseStats: unit.stats,
-    stats: applyModifiers(unit.stats, applied),
+    stats: applyModifiers(unit.stats, [...own.filter((m) => m.scope === 'self' && m.side !== 'enemy'), ...external]),
     totalCost: unit.cost + unit.upgrades.slice(0, lv).reduce((s, u) => s + u.cost, 0),
     nextUpgradeCost: unit.upgrades[lv]?.cost,
     appliedModifiers: applied,
@@ -92,7 +92,7 @@ export function formatModifier(m: Modifier): string {
   const val = m.op === 'add' ? (m.value >= 0 ? `+${m.value}` : String(m.value)) : `×${m.value}`;
   const scope = m.scope === 'self' ? '' : m.scope === 'aura' ? ` aura(${m.radius ?? '?'})` : ' global';
   const tags = m.tags?.length ? ` [${m.tags.join('+')}]` : '';
-  return `${m.stat} ${val}${scope}${tags}`;
+  return `${m.side === 'enemy' ? 'враги: ' : ''}${m.stat} ${val}${scope}${tags}`;
 }
 
 export type PreviewShape = 'cube' | 'cylinder' | 'pyramid' | 'sphere';

@@ -1,6 +1,7 @@
-import { buildPath, type PathData } from './path';
+import { buildPath, pointAt, type PathData } from './path';
 import { rngNext } from './rng';
-import type { Content, MissionConfig } from './types';
+import { applyModifiers } from './stats';
+import type { Content, MissionConfig, Modifier, Stats, Vec2 } from './types';
 
 export const TICK_RATE = 30;
 export const DT = 1 / TICK_RATE;
@@ -19,6 +20,8 @@ export interface UnitState {
   type: string;
   slot: number;
   level: number;
+  /** Тиков до следующего выстрела. */
+  cooldown: number;
 }
 
 export type SimEvent =
@@ -26,6 +29,8 @@ export type SimEvent =
   | { type: 'spawn'; enemy: number }
   | { type: 'leak'; enemy: number; damage: number }
   | { type: 'kill'; enemy: number; reward: number }
+  | { type: 'shot'; unit: number; enemy: number; damage: number }
+  | { type: 'income'; amount: number }
   | { type: 'bought'; unit: number }
   | { type: 'rejected'; command: Command; reason: 'money' | 'slot' | 'unknown' };
 
@@ -108,7 +113,7 @@ function applyCommand(sim: Sim, cmd: Command): void {
   if (s.money < cfg.cost) return void reject('money');
   s.money -= cfg.cost;
   const id = s.nextId++;
-  s.units.push({ id, type: cfg.id, slot: cmd.slot, level: 0 });
+  s.units.push({ id, type: cfg.id, slot: cmd.slot, level: 0, cooldown: 0 });
   s.events.push({ type: 'bought', unit: id });
 }
 
@@ -125,6 +130,71 @@ export function damageEnemy(sim: Sim, enemyId: number, amount: number): boolean 
   s.money += reward;
   s.events.push({ type: 'kill', enemy: e.id, reward });
   return true;
+}
+
+/** Модификаторы, которые даёт юнит: постоянные + купленные уровни улучшений. */
+function ownMods(sim: Sim, u: UnitState): Modifier[] {
+  const cfg = sim.content.units[u.type]!;
+  return [...cfg.modifiers, ...cfg.upgrades.slice(0, u.level).flatMap((g) => g.modifiers)];
+}
+
+const reaches = (m: Modifier, from: Vec2, to: Vec2, tags: readonly string[]): boolean =>
+  (m.scope === 'global' || (m.scope === 'aura' && Math.hypot(from.x - to.x, from.y - to.y) <= (m.radius ?? 0))) &&
+  (m.tags ?? []).every((t) => tags.includes(t));
+
+/** Эффективные статы юнита: свои self-модификаторы + ауры/глобальные эффекты других юнитов, подходящие по тегам. */
+export function unitStats(sim: Sim, unit: UnitState): Stats {
+  const cfg = sim.content.units[unit.type]!;
+  const pos = sim.mission.slots[unit.slot]!;
+  const mods = ownMods(sim, unit).filter((m) => m.scope === 'self' && m.side !== 'enemy');
+  for (const o of sim.state.units) {
+    if (o.id === unit.id) continue;
+    const from = sim.mission.slots[o.slot]!;
+    for (const m of ownMods(sim, o)) if (m.side !== 'enemy' && reaches(m, from, pos, cfg.tags)) mods.push(m);
+  }
+  return applyModifiers(cfg.stats, mods);
+}
+
+/** Эффективная скорость врага с учётом вражеских модификаторов юнитов (side: 'enemy'). */
+export function enemySpeed(sim: Sim, enemy: EnemyState): number {
+  const tags = sim.content.enemies[enemy.type]!.tags;
+  const pos = pointAt(sim.path, enemy.dist);
+  const mods: Modifier[] = [];
+  for (const u of sim.state.units) {
+    const from = sim.mission.slots[u.slot]!;
+    for (const m of ownMods(sim, u)) if (m.side === 'enemy' && reaches(m, from, pos, tags)) mods.push(m);
+  }
+  return mods.length ? (applyModifiers({ speed: enemy.speed }, mods).speed ?? enemy.speed) : enemy.speed;
+}
+
+/** Юниты стреляют по самому продвинутому врагу в радиусе; темп — fireRate выстрелов в секунду. */
+function fire(sim: Sim): void {
+  const s = sim.state;
+  for (const u of s.units) {
+    if (u.cooldown > 0) u.cooldown--;
+    if (u.cooldown > 0 || s.enemies.length === 0) continue;
+    const { damage = 0, range = 0, fireRate = 0 } = unitStats(sim, u);
+    if (damage <= 0 || fireRate <= 0) continue;
+    const pos = sim.mission.slots[u.slot]!;
+    let target: EnemyState | undefined;
+    for (const e of s.enemies) {
+      const p = pointAt(sim.path, e.dist);
+      if (Math.hypot(p.x - pos.x, p.y - pos.y) <= range && (!target || e.dist > target.dist)) target = e;
+    }
+    if (!target) continue;
+    s.events.push({ type: 'shot', unit: u.id, enemy: target.id, damage });
+    damageEnemy(sim, target.id, damage);
+    u.cooldown = Math.max(1, Math.round(TICK_RATE / fireRate));
+  }
+}
+
+/** Доход между волнами: сумма income всех юнитов, начисляется при старте волны. */
+function grantIncome(sim: Sim): void {
+  let amount = 0;
+  for (const u of sim.state.units) amount += unitStats(sim, u).income ?? 0;
+  if (amount <= 0) return;
+  sim.state.money += amount;
+  sim.state.events.push({ type: 'income', amount });
 }
 
 /** Текущая волна идёт и все её спавны выполнены. */
@@ -145,14 +215,16 @@ function advancePhase(sim: Sim): void {
     s.phaseTick = 0;
     s.nextSpawn = 0;
     s.events.push({ type: 'waveStart', wave: s.wave++ });
+    grantIncome(sim);
   }
 }
 
 /** Один фиксированный шаг симуляции. */
 export function step(sim: Sim, commands: readonly Command[] = []): void {
   const s = sim.state;
-  if (s.status !== 'running') return;
+  // События живут один тик: после конца матча повторный step не должен отдавать их заново.
   s.events = [];
+  if (s.status !== 'running') return;
   for (const c of commands) applyCommand(sim, c);
   advancePhase(sim);
 
@@ -165,7 +237,8 @@ export function step(sim: Sim, commands: readonly Command[] = []): void {
     s.events.push({ type: 'spawn', enemy: id });
   }
 
-  for (const e of s.enemies) e.dist += e.speed * DT;
+  fire(sim);
+  for (const e of s.enemies) e.dist += enemySpeed(sim, e) * DT;
   s.enemies = s.enemies.filter((e) => {
     if (e.dist < sim.path.length) return true;
     const damage = sim.content.enemies[e.type]!.leakDamage;

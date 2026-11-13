@@ -3,7 +3,8 @@ export interface Vec2 {
   y: number;
 }
 
-export type StatKey = 'damage' | 'range' | 'fireRate' | 'income';
+/** damage/range/fireRate/income — статы юнитов; speed — стат врага (множитель через side: 'enemy'). */
+export type StatKey = 'damage' | 'range' | 'fireRate' | 'income' | 'speed';
 export type Stats = Partial<Record<StatKey, number>>;
 
 /** Единица синергии/улучшения: итог = (база + Σadd) * Πmul. */
@@ -11,7 +12,9 @@ export interface Modifier {
   stat: StatKey;
   op: 'add' | 'mul';
   value: number;
-  /** self — на владельца, aura — на союзников в radius, global — на всех союзников. */
+  /** На кого действует: ally (по умолчанию) — другие юниты, enemy — враги. */
+  side?: 'ally' | 'enemy';
+  /** self — на владельца, aura — на цели в radius от владельца, global — на все цели. Аура и global не действуют на самого владельца. */
   scope: 'self' | 'aura' | 'global';
   radius?: number;
   /** Цель должна иметь все перечисленные теги. */

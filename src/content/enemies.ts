@@ -25,7 +25,7 @@ const runner: EnemyConfig = {
 const tank: EnemyConfig = {
   id: 'tank',
   name: 'Бронетехника',
-  hp: 140,
+  hp: 210,
   speed: 0.8,
   reward: 30,
   leakDamage: 3,
@@ -35,7 +35,7 @@ const tank: EnemyConfig = {
 const bomber: EnemyConfig = {
   id: 'bomber',
   name: 'Тяжёлый бомбардировщик',
-  hp: 600,
+  hp: 1800,
   speed: 0.6,
   reward: 150,
   leakDamage: 10,

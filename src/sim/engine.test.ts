@@ -177,8 +177,8 @@ describe('модификаторы', () => {
 describe('контент', () => {
   test('юнит-заглушка и миссия-прототип проходят через движок', () => {
     const sim = createSim(MISSIONS.proto!, CONTENT, 7);
-    step(sim, [{ type: 'buy', unit: 'stub', slot: 0 }]);
-    expect(sim.state.money).toBe(MISSIONS.proto!.startMoney - UNITS.stub!.cost);
+    step(sim, [{ type: 'buy', unit: 'f16', slot: 0 }]);
+    expect(sim.state.money).toBe(MISSIONS.proto!.startMoney - UNITS.f16!.cost);
     run(sim, 120 * TICK_RATE);
     expect(sim.state.status).toBe('lost');
   });

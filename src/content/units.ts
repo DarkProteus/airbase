@@ -1,15 +1,45 @@
 import type { UnitConfig } from '../sim';
 
-/** Заглушка: проверяет конвейер «конфиг → sim → UI». Настоящие юниты — TASK-8. */
-const stub: UnitConfig = {
-  id: 'stub',
-  name: 'Заглушка',
-  role: 'placeholder',
+/** Универсал: дёшев, стабильный урон по одной цели. */
+const f16: UnitConfig = {
+  id: 'f16',
+  name: 'F-16',
+  role: 'fighter',
   cost: 100,
-  tags: ['air'],
-  stats: { damage: 10, range: 3, fireRate: 1 },
+  tags: ['air', 'strike'],
+  stats: { damage: 12, range: 3, fireRate: 1.5 },
   modifiers: [],
-  upgrades: [{ cost: 75, modifiers: [{ stat: 'damage', op: 'mul', value: 1.5, scope: 'self' }] }],
+  upgrades: [
+    { cost: 80, modifiers: [{ stat: 'damage', op: 'mul', value: 1.4, scope: 'self' }] },
+    { cost: 140, modifiers: [{ stat: 'range', op: 'add', value: 1, scope: 'self' }] },
+  ],
 };
 
-export const UNITS: Record<string, UnitConfig> = { [stub.id]: stub };
+/** Поддержка: сам почти не бьёт; РЭБ ускоряет стрельбу ударных союзников в зоне и глушит (замедляет) врагов. */
+const growler: UnitConfig = {
+  id: 'growler',
+  name: 'EA-18G Growler',
+  role: 'support',
+  cost: 120,
+  tags: ['air', 'ew'],
+  stats: { damage: 2, range: 3, fireRate: 0.5 },
+  modifiers: [
+    { stat: 'fireRate', op: 'mul', value: 1.5, scope: 'aura', radius: 3, tags: ['strike'] },
+    { stat: 'speed', op: 'mul', value: 0.8, scope: 'aura', radius: 3, side: 'enemy' },
+  ],
+  upgrades: [{ cost: 120, modifiers: [{ stat: 'damage', op: 'mul', value: 1.2, scope: 'aura', radius: 3, tags: ['strike'] }] }],
+};
+
+/** Экономика: не воюет, приносит кредиты при старте каждой волны. */
+const c130: UnitConfig = {
+  id: 'c130',
+  name: 'C-130',
+  role: 'economy',
+  cost: 90,
+  tags: ['air', 'logistics'],
+  stats: { income: 35 },
+  modifiers: [],
+  upgrades: [{ cost: 100, modifiers: [{ stat: 'income', op: 'add', value: 25, scope: 'self' }] }],
+};
+
+export const UNITS: Record<string, UnitConfig> = { [f16.id]: f16, [growler.id]: growler, [c130.id]: c130 };

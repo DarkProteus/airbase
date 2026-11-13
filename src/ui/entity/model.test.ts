@@ -60,3 +60,23 @@ test('visualOf детерминирован; air => flying; роль задаё�
   expect(visualOf({ tags: ['ground'] }).flying).toBe(false);
   expect(visualOf({ role: 'other', tags: ['air'] }).color).not.toBe(visualOf({ role: 'r', tags: ['air'] }).color);
 });
+
+test('свои ауры и вражеские модификаторы не меняют статы владельца (как в sim)', () => {
+  const unit: UnitConfig = {
+    id: 's',
+    name: 'S',
+    role: 'support',
+    cost: 1,
+    tags: ['strike'],
+    stats: { fireRate: 1 },
+    modifiers: [
+      { stat: 'fireRate', op: 'mul', value: 2, scope: 'aura', radius: 3, tags: ['strike'] },
+      { stat: 'speed', op: 'mul', value: 0.5, scope: 'aura', radius: 3, side: 'enemy' },
+    ],
+    upgrades: [],
+  };
+  expect(viewUnit(unit).stats).toEqual({ fireRate: 1 });
+  expect(viewUnit(unit).appliedModifiers).toHaveLength(2);
+  // Та же аура от союзника — применяется; вражеский модификатор — нет.
+  expect(viewUnit(unit, 0, unit.modifiers).stats).toEqual({ fireRate: 2 });
+});
