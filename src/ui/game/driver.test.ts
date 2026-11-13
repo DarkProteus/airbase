@@ -13,6 +13,7 @@ const mission: MissionConfig = {
   id: 'm',
   name: 'M',
   size: { w: 10, h: 3 },
+  airfield: { x: 0, y: 0 },
   path: [
     { x: 0, y: 1 },
     { x: 9, y: 1 },

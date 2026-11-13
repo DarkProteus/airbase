@@ -15,6 +15,7 @@ const proto: MissionConfig = {
     { x: 8, y: 8 },
   ],
   size: { w: 13, h: 11 },
+  airfield: { x: 12, y: 1 },
   startMoney: 250,
   baseLives: 10,
   waves: [
@@ -39,6 +40,7 @@ const sortie: MissionConfig = {
     { x: 10, y: 8 },
   ],
   size: { w: 13, h: 11 },
+  airfield: proto.airfield,
   startMoney: 300,
   baseLives: 20,
   waves: [

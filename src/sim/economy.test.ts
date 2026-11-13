@@ -12,6 +12,7 @@ const mission = (over: Partial<MissionConfig> = {}): MissionConfig => ({
   id: 'm',
   name: 'M',
   size: { w: 21, h: 3 },
+  airfield: { x: 0, y: 0 },
   path: [{ x: 0, y: 0 }, { x: 20, y: 0 }],
   slots: [{ x: 5, y: 1 }, { x: 8, y: 1 }, { x: 11, y: 1 }],
   startMoney: 1000,

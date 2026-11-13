@@ -10,6 +10,7 @@ const mission = (slots: number[], over: Partial<MissionConfig> = {}): MissionCon
   id: 'm',
   name: 'M',
   size: { w: 41, h: 3 },
+  airfield: { x: 0, y: 0 },
   path: [{ x: 0, y: 0 }, { x: 40, y: 0 }],
   slots: slots.map((x) => ({ x, y: 1 })),
   startMoney: 10_000,

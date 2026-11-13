@@ -23,6 +23,7 @@ const mission = (over: Partial<MissionConfig> = {}): MissionConfig => ({
   ],
   slots: [{ x: 1, y: 1 }, { x: 2, y: 1 }],
   size: { w: 21, h: 11 },
+  airfield: { x: 0, y: 0 },
   startMoney: 150,
   baseLives: 5,
   waves: [{ prep: 1, groups: [{ enemy: 'e', count: 3, interval: 0.5 }] }],

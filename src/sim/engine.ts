@@ -1,6 +1,7 @@
 import { buyRejection, sellRefund, upgradeRejection, type RejectReason } from './economy';
 import { buildPath, pointAt, type PathData } from './path';
 import { rngNext } from './rng';
+import { createGroup, stepGroups, type GroupState, type LineupEntry } from './sortie';
 import { applyModifiers } from './stats';
 import type { Content, MissionConfig, Modifier, Stats, Vec2 } from './types';
 
@@ -31,6 +32,9 @@ export type SimEvent =
   | { type: 'leak'; enemy: number; damage: number }
   | { type: 'kill'; enemy: number; reward: number }
   | { type: 'shot'; unit: number; enemy: number; damage: number }
+  | { type: 'groupShot'; group: number; enemy: number; damage: number }
+  /** Вылет завершён: группа вернулась на аэродром; sortie — номер вылета группы с 1. */
+  | { type: 'sortieDone'; group: number; sortie: number }
   | { type: 'income'; amount: number }
   | { type: 'bought'; unit: number }
   | { type: 'upgraded'; unit: number; level: number }
@@ -60,6 +64,8 @@ export interface SimState {
   nextId: number;
   enemies: EnemyState[];
   units: UnitState[];
+  /** Авиагруппы на вылете: состав задаётся при создании матча и в бою не меняется. */
+  groups: GroupState[];
   /** События последнего тика. */
   events: SimEvent[];
 }
@@ -73,7 +79,9 @@ export interface Sim {
   state: SimState;
 }
 
-export function createSim(mission: MissionConfig, content: Content, seed: number): Sim {
+/** lineup — состав на вылет (группы, уровни, стартовые зоны); покупок групп в бою нет. */
+export function createSim(mission: MissionConfig, content: Content, seed: number, lineup: readonly LineupEntry[] = []): Sim {
+  const groups = lineup.map((entry, i) => createGroup(mission, content, entry, i + 1));
   const waveSpawns = mission.waves.map((wave) => {
     const spawns: { tick: number; enemy: string }[] = [];
     for (const g of wave.groups) {
@@ -98,9 +106,10 @@ export function createSim(mission: MissionConfig, content: Content, seed: number
       phase: 'prep',
       phaseTick: 0,
       nextSpawn: 0,
-      nextId: 1,
+      nextId: groups.length + 1,
       enemies: [],
       units: [],
+      groups,
       events: [],
     },
   };
@@ -266,6 +275,7 @@ export function step(sim: Sim, commands: readonly Command[] = []): void {
   }
 
   fire(sim);
+  stepGroups(sim);
   for (const e of s.enemies) e.dist += enemySpeed(sim, e) * DT;
   s.enemies = s.enemies.filter((e) => {
     if (e.dist < sim.path.length) return true;

@@ -3,8 +3,11 @@ export interface Vec2 {
   y: number;
 }
 
-/** damage/range/fireRate/income — статы юнитов; speed — стат врага (множитель через side: 'enemy'). */
-export type StatKey = 'damage' | 'range' | 'fireRate' | 'income' | 'speed';
+/**
+ * damage/range/fireRate/income — статы юнитов; speed — стат врага (множитель через side: 'enemy').
+ * Для авиагруппы: speed — скорость полёта, range — радиус зоны, fuel/ammo/rearmTime — ресурсы вылета.
+ */
+export type StatKey = 'damage' | 'range' | 'fireRate' | 'income' | 'speed' | 'fuel' | 'ammo' | 'rearmTime';
 export type Stats = Partial<Record<StatKey, number>>;
 
 /** Единица синергии/улучшения: итог = (база + Σadd) * Πmul. */
@@ -47,6 +50,45 @@ export interface UnitConfig {
   /** Уровни улучшения: каждый добавляет свои модификаторы. */
   upgrades: { cost: number; modifiers: Modifier[] }[];
   /** Облик; без него рендерер берёт запасной примитив из роли/тегов. */
+  visual?: VisualConfig;
+}
+
+/** Оружие группы: бьёт только врагов, у которых есть хотя бы один из целевых тегов (пустой список — любых). */
+export interface WeaponConfig {
+  damage: number;
+  /** Выстрелов в секунду. */
+  fireRate: number;
+  targetTags: string[];
+}
+
+/**
+ * Авиагруппа: не стоит в точке, а летает вылетами (см. sortie.ts):
+ * взлёт → перелёт → патруль в зоне → возврат → перезарядка → снова.
+ */
+export interface AirGroupConfig {
+  id: string;
+  name: string;
+  role: string;
+  /** Цена покупки на базе. */
+  cost: number;
+  tags: string[];
+  /** Клеток в секунду. */
+  speed: number;
+  /** Секунд полёта на один вылет (перелёт + патруль + возврат). */
+  fuel: number;
+  /** Выстрелов на один вылет, общий на всё оружие. */
+  ammo: number;
+  /** Секунд на взлёт перед каждым вылетом. */
+  takeoffTime: number;
+  /** Секунд на перезарядку и заправку после возврата. */
+  rearmTime: number;
+  /** Радиус зоны патрулирования в клетках. */
+  zoneRadius: number;
+  weapons: WeaponConfig[];
+  /** Аура-модификаторы группы; scope 'self' действует на саму группу. */
+  auras: Modifier[];
+  /** Уровни улучшения: каждый добавляет свои модификаторы. */
+  upgrades: { cost: number; modifiers: Modifier[] }[];
   visual?: VisualConfig;
 }
 
@@ -98,6 +140,8 @@ export interface MissionConfig {
   size: { w: number; h: number };
   /** Полилиния пути врагов в клетках. */
   path: Vec2[];
+  /** Аэродром: клетка на краю карты, откуда взлетают и куда возвращаются авиагруппы. */
+  airfield: Vec2;
   /** Клетки, куда можно ставить юниты. */
   slots: Vec2[];
   startMoney: number;
@@ -108,4 +152,6 @@ export interface MissionConfig {
 export interface Content {
   units: Record<string, UnitConfig>;
   enemies: Record<string, EnemyConfig>;
+  /** Авиагруппы; опционально, пока жива турельная модель. */
+  groups?: Record<string, AirGroupConfig>;
 }
