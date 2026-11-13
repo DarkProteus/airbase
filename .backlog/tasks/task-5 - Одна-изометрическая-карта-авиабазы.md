@@ -2,8 +2,10 @@
 id: TASK-5
 title: Одна изометрическая карта авиабазы
 status: To Do
-assignee: []
+assignee:
+  - '@sonnet'
 created_date: '2026-11-13T06:59:00Z'
+updated_date: '2026-11-13T07:12:00Z'
 labels:
   - size-M
   - render

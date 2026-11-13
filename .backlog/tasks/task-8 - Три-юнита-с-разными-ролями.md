@@ -2,8 +2,10 @@
 id: TASK-8
 title: Три юнита с разными ролями
 status: To Do
-assignee: []
+assignee:
+  - '@fable'
 created_date: '2026-11-13T06:59:00Z'
+updated_date: '2026-11-13T07:12:00Z'
 labels:
   - size-L
   - sim
