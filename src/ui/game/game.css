@@ -1,12 +1,15 @@
 .game-root {
   position: fixed;
   inset: 0;
+  display: flex;
+  flex-direction: column;
   background: #10151c;
   font-family: system-ui, sans-serif;
 }
 .game-view {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1;
+  min-height: 0;
 }
 .hud {
   position: absolute;
@@ -16,3 +19,42 @@
   font-size: 14px;
   pointer-events: none;
 }
+.notice {
+  position: absolute;
+  top: 34px;
+  left: 12px;
+  padding: 4px 10px;
+  background: #5a2630;
+  border: 1px solid #a8485a;
+  border-radius: 6px;
+  color: #ffd9de;
+  font-size: 13px;
+  pointer-events: none;
+}
+.dock {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 8px 12px;
+  background: #151b26;
+  border-top: 1px solid #2c3750;
+  overflow-x: auto;
+}
+.shop { display: flex; gap: 8px; }
+.shop-item { cursor: pointer; border-radius: 9px; outline: 2px solid transparent; }
+.shop-item[data-selected='true'] { outline-color: #ffd166; }
+.shop-item[data-disabled='true'] { opacity: 0.4; cursor: not-allowed; }
+.dock .card { min-width: 240px; padding: 8px; }
+.unit-panel { display: flex; gap: 8px; margin-left: auto; padding-left: 12px; border-left: 1px solid #2c3750; }
+.unit-actions { display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+.unit-actions button {
+  padding: 6px 12px;
+  background: #2c3750;
+  border: 1px solid #44527a;
+  border-radius: 6px;
+  color: #dfe6f3;
+  font-size: 13px;
+  cursor: pointer;
+}
+.unit-actions button:hover:not(:disabled) { background: #3a4868; }
+.unit-actions button:disabled { opacity: 0.4; cursor: not-allowed; }

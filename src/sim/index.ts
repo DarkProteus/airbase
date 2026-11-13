@@ -1,3 +1,4 @@
+export * from './economy';
 export * from './engine';
 export * from './path';
 export * from './rng';

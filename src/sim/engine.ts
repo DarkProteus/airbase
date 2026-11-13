@@ -1,3 +1,4 @@
+import { buyRejection, sellRefund, upgradeRejection, type RejectReason } from './economy';
 import { buildPath, pointAt, type PathData } from './path';
 import { rngNext } from './rng';
 import { applyModifiers } from './stats';
@@ -32,9 +33,15 @@ export type SimEvent =
   | { type: 'shot'; unit: number; enemy: number; damage: number }
   | { type: 'income'; amount: number }
   | { type: 'bought'; unit: number }
-  | { type: 'rejected'; command: Command; reason: 'money' | 'slot' | 'unknown' };
+  | { type: 'upgraded'; unit: number; level: number }
+  | { type: 'sold'; unit: number; refund: number }
+  | { type: 'rejected'; command: Command; reason: RejectReason };
 
-export type Command = { type: 'buy'; unit: string; slot: number };
+/** buy — купить юнит типа `unit` в слот; upgrade/sell — над юнитом матча по его id (UnitState.id). */
+export type Command =
+  | { type: 'buy'; unit: string; slot: number }
+  | { type: 'upgrade'; unit: number }
+  | { type: 'sell'; unit: number };
 
 export interface SimState {
   tick: number;
@@ -106,15 +113,36 @@ export const snapshot = (sim: Sim): SimState => structuredClone(sim.state);
 
 function applyCommand(sim: Sim, cmd: Command): void {
   const s = sim.state;
-  const cfg = sim.content.units[cmd.unit];
-  const reject = (reason: 'money' | 'slot' | 'unknown') => s.events.push({ type: 'rejected', command: cmd, reason });
-  if (!cfg) return void reject('unknown');
-  if (!sim.mission.slots[cmd.slot] || s.units.some((u) => u.slot === cmd.slot)) return void reject('slot');
-  if (s.money < cfg.cost) return void reject('money');
-  s.money -= cfg.cost;
-  const id = s.nextId++;
-  s.units.push({ id, type: cfg.id, slot: cmd.slot, level: 0, cooldown: 0 });
-  s.events.push({ type: 'bought', unit: id });
+  const reject = (reason: RejectReason) => void s.events.push({ type: 'rejected', command: cmd, reason });
+  switch (cmd.type) {
+    case 'buy': {
+      const reason = buyRejection(sim, cmd.unit, cmd.slot);
+      if (reason) return reject(reason);
+      s.money -= sim.content.units[cmd.unit]!.cost;
+      const id = s.nextId++;
+      s.units.push({ id, type: cmd.unit, slot: cmd.slot, level: 0, cooldown: 0 });
+      s.events.push({ type: 'bought', unit: id });
+      return;
+    }
+    case 'upgrade': {
+      const reason = upgradeRejection(sim, cmd.unit);
+      if (reason) return reject(reason);
+      const u = s.units.find((x) => x.id === cmd.unit)!;
+      s.money -= sim.content.units[u.type]!.upgrades[u.level]!.cost;
+      u.level++;
+      s.events.push({ type: 'upgraded', unit: u.id, level: u.level });
+      return;
+    }
+    case 'sell': {
+      const i = s.units.findIndex((x) => x.id === cmd.unit);
+      const u = s.units[i];
+      if (!u) return reject('unknown');
+      const refund = sellRefund(sim, u);
+      s.units.splice(i, 1);
+      s.money += refund;
+      s.events.push({ type: 'sold', unit: u.id, refund });
+    }
+  }
 }
 
 /** Наносит урон врагу; при гибели начисляет награду. Возвращает true, если враг убит. */
