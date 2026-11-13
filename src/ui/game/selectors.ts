@@ -1,75 +1,17 @@
-import { buyRejection, groupStats, nextUpgradeCost, objectiveGoal, objectiveRoute, rearmTicksLeft, sellRefund, TICK_RATE, toTicks, upgradeRejection, zoneRejection } from '../../sim';
-import type { Command, Content, MissionConfig, ObjectiveConfig, RejectReason, SimEvent, SimState, SortiePhase, UnitConfig, UnitState, Vec2, World } from '../../sim';
-import { viewUnit } from '../entity/model';
-import type { UnitView } from '../entity/model';
+import { effectiveGroupStats, groupStats, objectiveGoal, objectiveRoute, rearmTicksLeft, TICK_RATE, toTicks, zoneRejection } from '../../sim';
+import type { Command, Content, MissionConfig, ObjectiveConfig, RejectReason, SimEvent, SimState, SortiePhase, Vec2, World } from '../../sim';
 
 /**
- * Чистые селекторы UI: из снапшота, миссии и конфигов считают цены/доступность/тексты.
- * Сами правила (хватает ли денег, свободен ли слот) — функции sim, те же, что применяет движок.
+ * Чистые селекторы UI: из снапшота, миссии и конфигов считают строки HUD и подсказки.
+ * Сами правила (допустима ли зона) — функции sim, те же, что применяет движок.
  */
 
 export const world = (mission: MissionConfig, content: Content, state: SimState): World => ({ mission, content, state });
 
 export const REJECT_TEXT: Record<RejectReason, string> = {
-  money: 'Не хватает денег',
-  slot: 'Слот занят или недоступен',
-  unknown: 'Юнит не найден',
-  maxLevel: 'Максимальный уровень',
   unknownGroup: 'Авиагруппа не найдена',
   outOfMap: 'Зона вне карты',
 };
-
-export interface ShopItem {
-  unit: UnitConfig;
-  /** Хватает ли денег на покупку (слот не учитывается: он выбирается позже). */
-  affordable: boolean;
-}
-
-export function shopItems(content: Content, state: SimState): ShopItem[] {
-  return Object.values(content.units).map((unit) => ({ unit, affordable: state.money >= unit.cost }));
-}
-
-export interface UnitPanelModel {
-  unit: UnitState;
-  config: UnitConfig;
-  /** Статы и уровень юнита на его текущем уровне для универсальной карточки. */
-  view: UnitView;
-  /** Цена следующего улучшения; undefined — максимум. */
-  upgradeCost: number | undefined;
-  /** Почему улучшить нельзя (undefined — можно). */
-  upgradeBlocked: RejectReason | undefined;
-  /** Сколько вернёт продажа. */
-  refund: number;
-}
-
-export function unitPanel(w: World, unitId: number | null): UnitPanelModel | null {
-  const unit = w.state.units.find((u) => u.id === unitId);
-  const config = unit && w.content.units[unit.type];
-  if (!unit || !config) return null;
-  return {
-    unit,
-    config,
-    view: viewUnit(config, unit.level),
-    upgradeCost: nextUpgradeCost(w, unit),
-    upgradeBlocked: upgradeRejection(w, unit.id),
-    refund: sellRefund(w, unit),
-  };
-}
-
-export type SlotAction =
-  | { kind: 'select'; unit: number }
-  | { kind: 'buy'; command: Command; rejection: RejectReason | undefined }
-  | { kind: 'hint'; text: string };
-
-export const SELECT_HINT = 'Выберите юнит в магазине';
-
-/** Что делает клик по слоту: занятый — выбирает юнит; свободный — ставит выбранную карточку магазина. */
-export function slotClick(w: World, shop: string | null, slot: number): SlotAction {
-  const occupant = w.state.units.find((u) => u.slot === slot);
-  if (occupant) return { kind: 'select', unit: occupant.id };
-  if (shop === null) return { kind: 'hint', text: SELECT_HINT };
-  return { kind: 'buy', command: { type: 'buy', unit: shop, slot }, rejection: buyRejection(w, shop, slot) };
-}
 
 /** Текст последнего отказа среди событий тика (undefined — отказов не было). */
 export function rejectionNotice(events: readonly SimEvent[]): string | undefined {
@@ -117,7 +59,7 @@ const OBJECTIVE_TEXT: Record<ObjectiveConfig['type'], { name: string; left: (o: 
 export function hudLine(mission: MissionConfig, s: SimState): string {
   const o = objectiveInfo(mission, s);
   const goal = o ? `${OBJECTIVE_TEXT[o.type].name} ${o.hp}/${o.maxHp} · ${OBJECTIVE_TEXT[o.type].left(o)}` : `жизни ${s.lives}`;
-  const parts = [`$ ${s.money}`, goal, `волна ${s.wave}/${mission.waves.length} (${PHASE_TEXT[s.phase]})`];
+  const parts = [`награда ${s.money}`, goal, `волна ${s.wave}/${mission.waves.length} (${PHASE_TEXT[s.phase]})`];
   if (s.status !== 'running') parts.push(STATUS_TEXT[s.status]);
   return parts.join(' · ');
 }
@@ -142,7 +84,7 @@ export interface GroupRow {
   ammo: { left: number; max: number };
   /** Секунд до конца перезарядки; null вне фазы rearm. */
   rearmSeconds: number | null;
-  /** Радиус зоны патрулирования в клетках (после модификаторов). */
+  /** Радиус зоны патрулирования в клетках (после модификаторов и аур союзников). */
   zoneRadius: number;
 }
 
@@ -152,13 +94,13 @@ export function groupRows(w: World): GroupRow[] {
     const capacity = toTicks(st.fuel);
     return {
       id: g.id,
-      name: w.content.groups?.[g.type]?.name ?? g.type,
+      name: w.content.groups[g.type]?.name ?? g.type,
       phase: g.phase,
       phaseLabel: PHASE_LABEL[g.phase],
       fuel: { seconds: g.fuel / TICK_RATE, ratio: capacity > 0 ? Math.min(1, g.fuel / capacity) : 0 },
       ammo: { left: g.ammo, max: st.ammo },
       rearmSeconds: g.phase === 'rearm' ? rearmTicksLeft(w, g) / TICK_RATE : null,
-      zoneRadius: st.zoneRadius,
+      zoneRadius: effectiveGroupStats(w, g).zoneRadius,
     };
   });
 }

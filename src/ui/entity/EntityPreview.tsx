@@ -3,7 +3,7 @@ import { visualOf } from './model';
 import type { Visual } from './model';
 
 interface Props {
-  /** Любая сущность с тегами (юнит с ролью, враг). Всё берётся из конфига. */
+  /** Любая сущность с тегами (группа с ролью, враг). Всё берётся из конфига. */
   entity: { role?: string; tags: readonly string[]; visual?: VisualConfig };
   size?: number;
 }

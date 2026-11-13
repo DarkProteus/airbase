@@ -65,7 +65,7 @@ export function soundsForEvents(events: readonly SimEvent[]): SoundId[] {
   };
   for (const ev of events) {
     switch (ev.type) {
-      case 'shot':
+      case 'groupShot':
         add('shot');
         break;
       case 'kill':

@@ -1,7 +1,7 @@
 import type { RejectReason, World } from './economy';
 import { damageEnemy, DT, enemyThreat, TICK_RATE, type EnemyState, type Sim } from './engine';
 import { applyModifiers } from './stats';
-import type { AirGroupConfig, Content, MissionConfig, Vec2, WeaponConfig } from './types';
+import type { AirGroupConfig, Content, MissionConfig, Modifier, Vec2, WeaponConfig } from './types';
 
 /** Фазы вылета по порядку; после rearm группа снова взлетает. */
 export type SortiePhase = 'takeoff' | 'transit' | 'patrol' | 'return' | 'rearm';
@@ -23,7 +23,7 @@ export interface GroupState {
   /** Тиков с начала текущей фазы. */
   phaseTick: number;
   pos: Vec2;
-  /** Остаток топлива в тиках полёта. */
+  /** Остаток топлива в тиках полёта (дробный, если аура союзника растягивает бак). */
   fuel: number;
   ammo: number;
   /** Тиков до следующего выстрела, по одному на каждое оружие. */
@@ -39,6 +39,8 @@ export interface GroupStats {
   ammo: number;
   rearmTime: number;
   zoneRadius: number;
+  /** Бонус к награде миссии за завершённый вылет. */
+  income: number;
   weapons: WeaponConfig[];
 }
 
@@ -65,29 +67,91 @@ export function zoneRejection(w: Pick<World, 'mission' | 'state'>, group: number
 }
 
 function groupConfig(content: Content, type: string): AirGroupConfig {
-  const cfg = content.groups?.[type];
+  const cfg = content.groups[type];
   if (!cfg) throw new Error(`unknown group: ${type}`);
   return cfg;
 }
 
-/** Параметры группы: конфиг + свои self-модификаторы (auras и купленные уровни улучшений). */
-export function groupStats(w: { readonly content: Content }, g: Pick<GroupState, 'type' | 'level'>): GroupStats {
-  const cfg = groupConfig(w.content, g.type);
-  const mods = [...cfg.auras, ...cfg.upgrades.slice(0, g.level).flatMap((u) => u.modifiers)].filter(
-    (m) => m.scope === 'self' && m.side !== 'enemy',
+/** Свои модификаторы группы: ауры конфига + купленные уровни улучшений. */
+export const ownModifiers = (cfg: AirGroupConfig, level: number): Modifier[] => [
+  ...cfg.auras,
+  ...cfg.upgrades.slice(0, level).flatMap((u) => u.modifiers),
+];
+
+/**
+ * Параметры группы по конфигу и уровню: свои self-модификаторы + внешние (`external` — ауры других групп,
+ * уже отобранные по радиусу и тегам). Этой же функцией считают карточки базы и галереи.
+ */
+export function configStats(cfg: AirGroupConfig, level: number, external: readonly Modifier[] = []): GroupStats {
+  const mods = [...ownModifiers(cfg, level).filter((m) => m.scope === 'self' && m.side !== 'enemy'), ...external];
+  const s = applyModifiers(
+    { speed: cfg.speed, fuel: cfg.fuel, ammo: cfg.ammo, rearmTime: cfg.rearmTime, range: cfg.zoneRadius, income: cfg.income ?? 0 },
+    mods,
   );
-  const s = applyModifiers({ speed: cfg.speed, fuel: cfg.fuel, ammo: cfg.ammo, rearmTime: cfg.rearmTime, range: cfg.zoneRadius }, mods);
   return {
     speed: s.speed ?? 0,
     fuel: s.fuel ?? 0,
     ammo: Math.floor(s.ammo ?? 0),
     rearmTime: s.rearmTime ?? 0,
     zoneRadius: s.range ?? 0,
+    income: s.income ?? 0,
     weapons: cfg.weapons.map((weapon) => {
       const ws = applyModifiers({ damage: weapon.damage, fireRate: weapon.fireRate }, mods);
       return { ...weapon, damage: ws.damage ?? 0, fireRate: ws.fireRate ?? 0 };
     }),
   };
+}
+
+/** Собственные параметры группы матча — без аур других групп (ёмкость бака, боекомплект, радиус её ауры). */
+export const groupStats = (w: { readonly content: Content }, g: Pick<GroupState, 'type' | 'level'>, external: readonly Modifier[] = []): GroupStats =>
+  configStats(groupConfig(w.content, g.type), g.level, external);
+
+/** Источник аур: патрулирующая группа; аура исходит из центра её зоны. */
+export interface AuraSource {
+  id: number;
+  zone: Vec2;
+  /** Радиус ауры по умолчанию — собственный радиус зоны владельца. */
+  radius: number;
+  mods: Modifier[];
+}
+
+type AuraWorld = Pick<World, 'content' | 'state'>;
+
+/** Ауры действуют только в фазе patrol: на взлёте, в перелёте, на возврате и перезарядке эффекта нет. */
+export function auraSources(w: AuraWorld): AuraSource[] {
+  const out: AuraSource[] = [];
+  for (const g of w.state.groups) {
+    if (g.phase !== 'patrol') continue;
+    const cfg = groupConfig(w.content, g.type);
+    const mods = ownModifiers(cfg, g.level).filter((m) => m.scope !== 'self');
+    if (mods.length) out.push({ id: g.id, zone: g.zone, radius: configStats(cfg, g.level).zoneRadius, mods });
+  }
+  return out;
+}
+
+/** Модификаторы источников, достающие цель в точке `pos` с тегами `tags`; `except` — id группы-цели (своя аура на владельца не действует). */
+function auraMods(sources: readonly AuraSource[], side: 'ally' | 'enemy', pos: Vec2, tags: readonly string[], except?: number): Modifier[] {
+  const out: Modifier[] = [];
+  for (const src of sources) {
+    if (src.id === except) continue;
+    for (const m of src.mods) {
+      if ((m.side ?? 'ally') !== side) continue;
+      if (m.scope !== 'global' && dist(src.zone, pos) > (m.radius ?? src.radius)) continue;
+      if ((m.tags ?? []).every((t) => tags.includes(t))) out.push(m);
+    }
+  }
+  return out;
+}
+
+/** Параметры группы в бою: собственные + ауры союзных групп, в чьей зоне она сейчас находится. */
+export function effectiveGroupStats(w: AuraWorld, g: GroupState, sources: readonly AuraSource[] = auraSources(w)): GroupStats {
+  return groupStats(w, g, auraMods(sources, 'ally', g.pos, groupConfig(w.content, g.type).tags, g.id));
+}
+
+/** Скорость врага с учётом вражеских модификаторов (side: 'enemy') патрулирующих групп. */
+export function enemySpeed(w: AuraWorld, enemy: EnemyState, sources: readonly AuraSource[] = auraSources(w)): number {
+  const mods = auraMods(sources, 'enemy', enemy.pos, w.content.enemies[enemy.type]!.tags);
+  return mods.length ? (applyModifiers({ speed: enemy.speed }, mods).speed ?? enemy.speed) : enemy.speed;
 }
 
 /** Группа в начале матча: на аэродроме, заправлена и заряжена, начинает взлёт. */
@@ -163,13 +227,18 @@ function fire(sim: Sim, g: GroupState, st: GroupStats): void {
  * Один тик цикла вылета всех групп. Топливо тратится в воздухе (перелёт, патруль, возврат);
  * группа уходит на возврат, когда остатка хватает только долететь до аэродрома, или когда кончился боекомплект.
  * Длительность взлёта и перезарядки — минимум один тик.
+ * Ауры союзников меняют параметры на лету: радиус зоны, урон, скорость; аура на fuel растягивает бак —
+ * топливо расходуется медленнее в own.fuel / st.fuel раз. Завершённый вылет приносит income группы в награду миссии.
  */
 export function stepGroups(sim: Sim): void {
   const home = sim.mission.airfield;
+  const sources = auraSources(sim);
   for (const g of sim.state.groups) {
     const cfg = groupConfig(sim.content, g.type);
-    const st = groupStats(sim, g);
+    const own = groupStats(sim, g);
+    const st = effectiveGroupStats(sim, g, sources);
     const stepLen = st.speed * DT;
+    const burn = st.fuel > 0 ? own.fuel / st.fuel : 1;
     g.cooldowns = g.cooldowns.map((c) => Math.max(0, c - 1));
     g.phaseTick++;
     const bingo = () => g.fuel <= flightTicks(g.pos, home, st.speed);
@@ -178,29 +247,33 @@ export function stepGroups(sim: Sim): void {
         if (g.phaseTick >= toTicks(cfg.takeoffTime)) setPhase(g, 'transit');
         break;
       case 'transit':
-        g.fuel--;
+        g.fuel -= burn;
         if (moveTo(g.pos, g.zone, stepLen)) setPhase(g, 'patrol');
         else if (bingo()) setPhase(g, 'return');
         break;
       case 'patrol':
-        g.fuel--;
+        g.fuel -= burn;
         // Зону могли перенести: в патруле группа держится её центра.
         if (!moveTo(g.pos, g.zone, stepLen)) setPhase(g, 'transit');
         else fire(sim, g, st);
-        if ((st.ammo > 0 && g.ammo <= 0) || bingo()) setPhase(g, 'return');
+        if ((own.ammo > 0 && g.ammo <= 0) || bingo()) setPhase(g, 'return');
         break;
       case 'return':
-        g.fuel = Math.max(0, g.fuel - 1);
+        g.fuel = Math.max(0, g.fuel - burn);
         if (moveTo(g.pos, home, stepLen)) {
           g.sorties++;
           sim.state.events.push({ type: 'sortieDone', group: g.id, sortie: g.sorties });
+          if (st.income > 0) {
+            sim.state.money += st.income;
+            sim.state.events.push({ type: 'income', group: g.id, amount: st.income });
+          }
           setPhase(g, 'rearm');
         }
         break;
       case 'rearm':
-        if (g.phaseTick >= toTicks(st.rearmTime)) {
-          g.fuel = toTicks(st.fuel);
-          g.ammo = st.ammo;
+        if (g.phaseTick >= toTicks(own.rearmTime)) {
+          g.fuel = toTicks(own.fuel);
+          g.ammo = own.ammo;
           setPhase(g, 'takeoff');
         }
         break;

@@ -4,8 +4,9 @@ export interface Vec2 {
 }
 
 /**
- * damage/range/fireRate/income — статы юнитов; speed — стат врага (множитель через side: 'enemy').
- * Для авиагруппы: speed — скорость полёта, range — радиус зоны, fuel/ammo/rearmTime — ресурсы вылета.
+ * Статы авиагруппы: speed — скорость полёта, range — радиус зоны, fuel/ammo/rearmTime — ресурсы вылета,
+ * damage/fireRate — оружие, income — бонус к награде за завершённый вылет.
+ * speed с side: 'enemy' — множитель скорости врага.
  */
 export type StatKey = 'damage' | 'range' | 'fireRate' | 'income' | 'speed' | 'fuel' | 'ammo' | 'rearmTime';
 export type Stats = Partial<Record<StatKey, number>>;
@@ -15,10 +16,14 @@ export interface Modifier {
   stat: StatKey;
   op: 'add' | 'mul';
   value: number;
-  /** На кого действует: ally (по умолчанию) — другие юниты, enemy — враги. */
+  /** На кого действует: ally (по умолчанию) — другие группы, enemy — враги. */
   side?: 'ally' | 'enemy';
-  /** self — на владельца, aura — на цели в radius от владельца, global — на все цели. Аура и global не действуют на самого владельца. */
+  /**
+   * self — на владельца; aura — на цели в radius от центра зоны владельца; global — на все цели.
+   * Аура и global работают, только пока владелец патрулирует, и не действуют на него самого.
+   */
   scope: 'self' | 'aura' | 'global';
+  /** Радиус ауры в клетках; по умолчанию — радиус зоны владельца. */
   radius?: number;
   /** Цель должна иметь все перечисленные теги. */
   tags?: string[];
@@ -36,21 +41,6 @@ export interface VisualConfig {
   scale?: number;
   /** Высота полёта над землёй в клетках; по умолчанию 0,9 для тега air и 0 для остальных. */
   altitude?: number;
-}
-
-export interface UnitConfig {
-  id: string;
-  name: string;
-  role: string;
-  cost: number;
-  tags: string[];
-  stats: Stats;
-  /** Постоянные эффекты юнита (в т.ч. ауры на союзников). */
-  modifiers: Modifier[];
-  /** Уровни улучшения: каждый добавляет свои модификаторы. */
-  upgrades: { cost: number; modifiers: Modifier[] }[];
-  /** Облик; без него рендерер берёт запасной примитив из роли/тегов. */
-  visual?: VisualConfig;
 }
 
 /** Оружие группы: бьёт только врагов, у которых есть хотя бы один из целевых тегов (пустой список — любых). */
@@ -84,6 +74,8 @@ export interface AirGroupConfig {
   rearmTime: number;
   /** Радиус зоны патрулирования в клетках. */
   zoneRadius: number;
+  /** Бонус к награде миссии за каждый завершённый вылет. */
+  income?: number;
   weapons: WeaponConfig[];
   /** Аура-модификаторы группы; scope 'self' действует на саму группу. */
   auras: Modifier[];
@@ -130,7 +122,7 @@ export type WaveStartRule = 'timer' | 'clear';
 export interface Wave {
   /** Правило старта; по умолчанию timer. */
   start?: WaveStartRule;
-  /** Фаза подготовки перед волной, секунд (покупки/улучшения). */
+  /** Фаза подготовки перед волной, секунд. */
   prep: number;
   groups: WaveGroup[];
 }
@@ -149,7 +141,7 @@ export interface MissionConfig {
   name: string;
   /** Размер сетки карты в клетках: x ∈ [0, w), y ∈ [0, h). */
   size: { w: number; h: number };
-  /** Полилиния пути врагов в клетках — турельные миссии без цели: враги идут по пути и отнимают жизни базы. */
+  /** Полилиния пути врагов в клетках — миссии без цели: враги идут по пути и отнимают жизни базы. */
   path?: Vec2[];
   /** Цель миссии: с ней враги появляются в `spawns` и летят на текущую позицию цели, а `path` и жизни базы не используются. */
   objective?: ObjectiveConfig;
@@ -157,16 +149,11 @@ export interface MissionConfig {
   spawns?: Vec2[];
   /** Аэродром: клетка на краю карты, откуда взлетают и куда возвращаются авиагруппы. */
   airfield: Vec2;
-  /** Клетки, куда можно ставить юниты. */
-  slots: Vec2[];
-  startMoney: number;
   baseLives: number;
   waves: Wave[];
 }
 
 export interface Content {
-  units: Record<string, UnitConfig>;
   enemies: Record<string, EnemyConfig>;
-  /** Авиагруппы; опционально, пока жива турельная модель. */
-  groups?: Record<string, AirGroupConfig>;
+  groups: Record<string, AirGroupConfig>;
 }

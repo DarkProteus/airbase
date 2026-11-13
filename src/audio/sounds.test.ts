@@ -3,18 +3,18 @@ import type { SimEvent } from '../sim';
 import { loadMuted, MUTE_KEY, saveMuted } from './storage';
 import { createThrottle, pickSounds, soundsForEvents, VOICES } from './sounds';
 
-const shot = (n: number): SimEvent => ({ type: 'shot', unit: n, enemy: 1, damage: 1 });
+const shot = (n: number): SimEvent => ({ type: 'groupShot', group: n, enemy: 1, damage: 1 });
 
-test('события -> звуки: shot, kill, leak(baseHit), waveStart; прочее и будущие события игнорируются', () => {
+test('события -> звуки: groupShot(shot), kill, leak(baseHit), waveStart; прочее и будущие события игнорируются', () => {
   const events = [
     shot(1),
     shot(2),
     { type: 'kill', enemy: 1, reward: 5 },
     { type: 'leak', enemy: 2, damage: 1 },
     { type: 'waveStart', wave: 0 },
-    { type: 'income', amount: 3 },
-    { type: 'bought', unit: 1 },
-    { type: 'sell', unit: 1 },
+    { type: 'income', group: 1, amount: 3 },
+    { type: 'sortieDone', group: 1, sortie: 1 },
+    { type: 'future' },
   ] as unknown as SimEvent[];
   // Много выстрелов в пакете -> один звук выстрела.
   expect(soundsForEvents(events)).toEqual(['shot', 'kill', 'baseHit', 'wave']);

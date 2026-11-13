@@ -114,8 +114,3 @@ export function screenToWorld(s: Vec2, view: IsoView): Vec3 {
 export function pickCell(s: Vec2, view: IsoView, size: GridSize): Vec2 | null {
   return cellAt(worldToCell(screenToWorld(s, view), size), size);
 }
-
-/** Индекс слота размещения, лежащего в клетке, или -1. */
-export function slotIndexAt(slots: readonly Vec2[], cell: Vec2): number {
-  return slots.findIndex((s) => Math.round(s.x) === cell.x && Math.round(s.y) === cell.y);
-}

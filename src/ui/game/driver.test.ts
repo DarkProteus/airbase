@@ -4,8 +4,8 @@ import type { Command, Content, MissionConfig, SimEvent, SimState } from '../../
 import { startGame, withEvents } from './driver';
 
 const content: Content = {
-  units: {
-    gun: { id: 'gun', name: 'Gun', role: 'r', cost: 10, tags: [], stats: { damage: 5, range: 20, fireRate: 3 }, modifiers: [], upgrades: [] },
+  groups: {
+    gun: { id: 'gun', name: 'Gun', role: 'r', cost: 10, tags: [], speed: 5, fuel: 100, ammo: 100, takeoffTime: 0, rearmTime: 1, zoneRadius: 20, weapons: [{ damage: 5, fireRate: 3, targetTags: [] }], auras: [], upgrades: [] },
   },
   enemies: { e: { id: 'e', name: 'E', hp: 8, speed: 2, reward: 1, leakDamage: 1, tags: [] } },
 };
@@ -18,8 +18,6 @@ const mission: MissionConfig = {
     { x: 0, y: 1 },
     { x: 9, y: 1 },
   ],
-  slots: [{ x: 3, y: 0 }],
-  startMoney: 100,
   baseLives: 5,
   waves: [{ prep: 0.1, groups: [{ enemy: 'e', count: 4, interval: 0.3 }] }],
 };
@@ -40,12 +38,13 @@ test('драйвер отдаёт события всех шагов кадра,
   vi.stubGlobal('cancelAnimationFrame', () => {});
 
   const snaps: SimState[] = [];
-  const driver = startGame(mission, content, 7, (s) => snaps.push(s));
-  const buy: Command = { type: 'buy', unit: 'gun', slot: 0 };
-  driver.dispatch(buy);
+  const lineup = [{ group: 'gun', level: 0, zone: { x: 3, y: 0 } }];
+  const driver = startGame(mission, content, 7, (s) => snaps.push(s), lineup);
+  const move: Command = { type: 'setZone', group: 1, zone: { x: 4, y: 1 } };
+  driver.dispatch(move);
 
   // Эталон: те же команды и тики на голой sim.
-  const ref = createSim(mission, content, 7);
+  const ref = createSim(mission, content, 7, lineup);
   const refEvents: SimEvent[] = [];
   let t = 0;
   cb?.(t); // первый кадр: dt = 0
@@ -57,7 +56,7 @@ test('драйвер отдаёт события всех шагов кадра,
     cb?.(t);
     if (snaps.length === before) continue;
     for (let i = 0; i < 4; i++) {
-      step(ref, first ? [buy] : []);
+      step(ref, first ? [move] : []);
       first = false;
       refEvents.push(...ref.state.events);
     }
@@ -66,6 +65,7 @@ test('драйвер отдаёт события всех шагов кадра,
   const got = snaps.slice(1).flatMap((s) => s.events);
   expect(got.length).toBeGreaterThan(lastTickOnly); // без накопления промежуточные тики терялись бы
   expect(got).toEqual(refEvents);
-  expect(got.some((e) => e.type === 'shot')).toBe(true);
+  expect(got.some((e) => e.type === 'zoneSet')).toBe(true);
+  expect(got.some((e) => e.type === 'groupShot')).toBe(true);
   driver.stop();
 });

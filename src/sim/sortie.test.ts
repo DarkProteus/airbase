@@ -21,7 +21,6 @@ const group = (over: Partial<AirGroupConfig> = {}): AirGroupConfig => ({
 });
 
 const content = (groups: AirGroupConfig[] = [group()]): Content => ({
-  units: {},
   enemies: {
     // Живучий и медленный: идёт по y = 0 со скоростью 0,5 клетки/с.
     e: { id: 'e', name: 'E', hp: 1e6, speed: 0.5, reward: 1, leakDamage: 1, tags: ['ground'] },
@@ -40,8 +39,6 @@ const mission = (over: Partial<MissionConfig> = {}): MissionConfig => ({
     { x: 0, y: 0 },
     { x: 20, y: 0 },
   ],
-  slots: [],
-  startMoney: 0,
   baseLives: 5,
   waves: [],
   ...over,
@@ -85,12 +82,10 @@ describe('состав на вылет', () => {
     expect(new Set(sim.state.groups.map((g) => g.id)).size).toBe(2);
   });
 
-  test('без состава групп нет; купить группу командой в бою нельзя', () => {
-    const sim = createSim(mission({ slots: [{ x: 1, y: 1 }], startMoney: 1000 }), content(), 1);
-    step(sim, [{ type: 'buy', unit: 'g', slot: 0 }]);
+  test('без состава групп нет', () => {
+    const sim = createSim(mission(), content(), 1);
+    step(sim);
     expect(sim.state.groups).toEqual([]);
-    expect(sim.state.units).toEqual([]);
-    expect(sim.state.events).toMatchObject([{ type: 'rejected', reason: 'unknown' }]);
   });
 
   test('неверный состав или аэродром не на краю — ошибка создания', () => {

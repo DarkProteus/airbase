@@ -2,7 +2,7 @@ import type { SimEvent } from '../sim';
 
 /**
  * Чистое отображение «событие снапшота -> визуальный эффект». Без three: сцена только исполняет описания.
- * События, которых здесь нет (bought, income, upgrade, sell...), молча игнорируются.
+ * События, которых здесь нет (income, sortieDone, zoneSet...), молча игнорируются.
  */
 
 export interface Vec3 {
@@ -12,14 +12,14 @@ export interface Vec3 {
 }
 
 export type EffectSpec =
-  /** Трассер выстрела от юнита к цели. */
+  /** Трассер выстрела от группы к цели. */
   | { kind: 'tracer'; from: Vec3; to: Vec3; ttl: number; color: number }
   /** Расширяющаяся вспышка: попадание, взрыв, удар по базе. */
   | { kind: 'burst'; at: Vec3; ttl: number; color: number; radius: number };
 
 export interface EffectContext {
-  /** Позиция юнита по id (мир), если известна. */
-  unitPos(id: number): Vec3 | undefined;
+  /** Позиция группы по id (мир), если известна. */
+  groupPos(id: number): Vec3 | undefined;
   /** Позиция врага по id в момент до удаления из снапшота. */
   enemyPos(id: number): Vec3 | undefined;
   basePos: Vec3;
@@ -27,7 +27,7 @@ export interface EffectContext {
 
 export interface EffectPlan {
   effects: EffectSpec[];
-  /** Юниты, сделавшие выстрел (для отдачи). */
+  /** Группы, сделавшие выстрел (для отдачи). */
   fired: number[];
   /** Враги, убитые в этом пакете событий (анимация гибели). */
   killed: number[];
@@ -41,10 +41,10 @@ export function planEffects(events: readonly SimEvent[], ctx: EffectContext): Ef
   const plan: EffectPlan = { effects: [], fired: [], killed: [], leaked: [] };
   for (const ev of events) {
     switch (ev.type) {
-      case 'shot': {
-        const from = ctx.unitPos(ev.unit);
+      case 'groupShot': {
+        const from = ctx.groupPos(ev.group);
         const to = ctx.enemyPos(ev.enemy);
-        plan.fired.push(ev.unit);
+        plan.fired.push(ev.group);
         if (from && to) {
           plan.effects.push({ kind: 'tracer', from, to, ttl: 200, color: EFFECT_COLORS.tracer });
           plan.effects.push({ kind: 'burst', at: to, ttl: 220, color: EFFECT_COLORS.hit, radius: 0.22 });
@@ -81,7 +81,7 @@ export function dyingScale(progress: number): number {
   return (1 - k) * (1 - k);
 }
 
-/** Масштаб юнита при выстреле: короткий импульс 1 -> 1.18 -> 1. */
+/** Масштаб группы при выстреле: короткий импульс 1 -> 1.18 -> 1. */
 export function recoilScale(progress: number): number {
   const k = Math.max(0, Math.min(1, progress));
   return 1 + 0.18 * Math.sin(Math.PI * k);

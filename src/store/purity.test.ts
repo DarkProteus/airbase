@@ -20,7 +20,7 @@ test('store импортирует из sim/content только типы: ни 
 });
 
 test('в store нет вызовов мутаций матча и драйвера', () => {
-  const MUTATION = /\b(createSim|step|applyCommand|damageEnemy|startGame|dispatch|buyRejection|upgradeRejection|sellRefund)\s*\(|type:\s*['"](buy|upgrade|sell)['"]/;
+  const MUTATION = /\b(createSim|step|applyCommand|damageEnemy|startGame|dispatch|zoneRejection|runMatch)\s*\(|type:\s*['"]setZone['"]/;
   const bad = sources().filter(({ text }) => MUTATION.test(text)).map((s) => s.file);
   expect(bad).toEqual([]);
 });

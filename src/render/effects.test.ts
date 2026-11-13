@@ -5,20 +5,20 @@ import type { EffectContext } from './effects';
 import { retarget, tweenDuration, tweenValue } from './motion';
 
 const ctx: EffectContext = {
-  unitPos: (id) => (id === 1 ? { x: 0, y: 1, z: 0 } : undefined),
+  groupPos: (id) => (id === 1 ? { x: 0, y: 1, z: 0 } : undefined),
   enemyPos: (id) => (id === 7 ? { x: 3, y: 0, z: 4 } : undefined),
   basePos: { x: 9, y: 0, z: 9 },
 };
 
-test('shot -> трассер + вспышка попадания, юнит отмечен для отдачи', () => {
-  const plan = planEffects([{ type: 'shot', unit: 1, enemy: 7, damage: 5 }], ctx);
+test('groupShot -> трассер + вспышка попадания, группа отмечена для отдачи', () => {
+  const plan = planEffects([{ type: 'groupShot', group: 1, enemy: 7, damage: 5 }], ctx);
   expect(plan.effects.map((e) => e.kind)).toEqual(['tracer', 'burst']);
   expect(plan.effects[0]).toMatchObject({ from: { x: 0, y: 1, z: 0 }, to: { x: 3, y: 0, z: 4 } });
   expect(plan.fired).toEqual([1]);
 });
 
-test('shot с неизвестной позицией не падает и не рисует трассер', () => {
-  const plan = planEffects([{ type: 'shot', unit: 1, enemy: 99, damage: 5 }], ctx);
+test('groupShot с неизвестной позицией не падает и не рисует трассер', () => {
+  const plan = planEffects([{ type: 'groupShot', group: 1, enemy: 99, damage: 5 }], ctx);
   expect(plan.effects).toEqual([]);
   expect(plan.fired).toEqual([1]);
 });
@@ -35,12 +35,12 @@ test('kill -> взрыв в позиции врага и пометка гибе
   expect(plan.effects[1]).toMatchObject({ kind: 'burst', at: { x: 9, y: 0, z: 9 } });
 });
 
-test('прочие события (waveStart, income, bought, будущие upgrade/sell) игнорируются', () => {
+test('прочие события (waveStart, income, sortieDone и будущие) игнорируются', () => {
   const events = [
     { type: 'waveStart', wave: 0 },
-    { type: 'income', amount: 5 },
-    { type: 'bought', unit: 1 },
-    { type: 'upgrade', unit: 1 },
+    { type: 'income', group: 1, amount: 5 },
+    { type: 'sortieDone', group: 1, sortie: 1 },
+    { type: 'future' },
   ] as unknown as SimEvent[];
   expect(planEffects(events, ctx)).toEqual({ effects: [], fired: [], killed: [], leaked: [] });
 });

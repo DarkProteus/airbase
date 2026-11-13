@@ -1,5 +1,5 @@
-import { applyModifiers } from '../../sim';
-import type { Modifier, Stats, UnitConfig, VisualConfig, VisualShape } from '../../sim';
+import { configStats, invested, maxLevel, nextUpgradeCost, ownModifiers } from '../../sim';
+import type { AirGroupConfig, GroupStats, Modifier, VisualConfig, VisualShape } from '../../sim';
 
 /** Чистая логика отображения сущностей: без React, без three. Строится только из конфигов. */
 
@@ -29,18 +29,8 @@ export function describeFields(config: object): FieldRow[] {
     .map(([key, v]) => ({ key, value: formatValue(v) }));
 }
 
-export function maxUpgradeLevel(unit: UnitConfig): number {
-  return unit.upgrades.length;
-}
-
-export function clampLevel(unit: UnitConfig, level: number): number {
-  return Math.max(0, Math.min(maxUpgradeLevel(unit), Math.floor(level)));
-}
-
-/** Модификаторы владельца на уровне level: постоянные + upgrades[0..level-1]. */
-export function unitModifiersAtLevel(unit: UnitConfig, level: number): Modifier[] {
-  const lv = clampLevel(unit, level);
-  return [...unit.modifiers, ...unit.upgrades.slice(0, lv).flatMap((u) => u.modifiers)];
+export function clampLevel(group: AirGroupConfig, level: number): number {
+  return Math.max(0, Math.min(maxLevel(group), Math.floor(level)));
 }
 
 /** Подходит ли модификатор цели с данными тегами (нужны все теги модификатора). */
@@ -48,49 +38,51 @@ export function modifierMatchesTags(mod: Modifier, tags: readonly string[]): boo
   return (mod.tags ?? []).every((t) => tags.includes(t));
 }
 
-export interface UnitView {
+export interface GroupView {
   level: number;
   maxLevel: number;
   /** Теги с учётом включённых в песочнице. */
   tags: string[];
-  baseStats: Stats;
-  stats: Stats;
+  /** Параметры уровня 0 без внешних модификаторов — точка отсчёта для подсветки изменений. */
+  baseStats: GroupStats;
+  stats: GroupStats;
   /** Суммарная стоимость: покупка + улучшения до level. */
   totalCost: number;
   /** Стоимость следующего улучшения, если оно есть. */
   nextUpgradeCost: number | undefined;
-  /** Модификаторы, реально применённые к статам. */
+  /** Модификаторы, реально применённые к параметрам. */
   appliedModifiers: Modifier[];
 }
 
-/** «Что-если» песочница: extraTags добавляются юниту, extraModifiers применяются, если подходят по тегам. */
-export function viewUnit(
-  unit: UnitConfig,
+/**
+ * Расчёт карточки группы теми же функциями, что в sim (configStats, invested).
+ * «Что-если» песочница: extraTags добавляются группе, extraModifiers (ауры союзников) применяются, если подходят по тегам.
+ */
+export function viewGroup(
+  group: AirGroupConfig,
   level = 0,
   extraModifiers: readonly Modifier[] = [],
   extraTags: readonly string[] = [],
-): UnitView {
-  const lv = clampLevel(unit, level);
-  const tags = [...new Set([...unit.tags, ...extraTags])];
-  // Как в sim: на свои статы действуют только self-модификаторы; ауры/global и side: 'enemy' — на других.
-  const own = unitModifiersAtLevel(unit, lv);
+): GroupView {
+  const lv = clampLevel(group, level);
+  const tags = [...new Set([...group.tags, ...extraTags])];
+  // Как в sim: свои ауры и side: 'enemy' на владельца не действуют — их отсекает configStats.
   const external = extraModifiers.filter((m) => m.side !== 'enemy' && modifierMatchesTags(m, tags));
-  const applied = [...own, ...external];
   return {
     level: lv,
-    maxLevel: maxUpgradeLevel(unit),
+    maxLevel: maxLevel(group),
     tags,
-    baseStats: unit.stats,
-    stats: applyModifiers(unit.stats, [...own.filter((m) => m.scope === 'self' && m.side !== 'enemy'), ...external]),
-    totalCost: unit.cost + unit.upgrades.slice(0, lv).reduce((s, u) => s + u.cost, 0),
-    nextUpgradeCost: unit.upgrades[lv]?.cost,
-    appliedModifiers: applied,
+    baseStats: configStats(group, 0),
+    stats: configStats(group, lv, external),
+    totalCost: invested(group, lv),
+    nextUpgradeCost: nextUpgradeCost(group, lv),
+    appliedModifiers: [...ownModifiers(group, lv), ...external],
   };
 }
 
 export function formatModifier(m: Modifier): string {
   const val = m.op === 'add' ? (m.value >= 0 ? `+${m.value}` : String(m.value)) : `×${m.value}`;
-  const scope = m.scope === 'self' ? '' : m.scope === 'aura' ? ` aura(${m.radius ?? '?'})` : ' global';
+  const scope = m.scope === 'self' ? '' : m.scope === 'aura' ? ` aura(${m.radius ?? 'зона'})` : ' global';
   const tags = m.tags?.length ? ` [${m.tags.join('+')}]` : '';
   return `${m.side === 'enemy' ? 'враги: ' : ''}${m.stat} ${val}${scope}${tags}`;
 }

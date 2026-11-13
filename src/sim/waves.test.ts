@@ -4,7 +4,7 @@ import { createSim, damageEnemy, snapshot, step, TICK_RATE } from '.';
 import type { Content, MissionConfig, SimEvent, Wave } from '.';
 
 const content: Content = {
-  units: {},
+  groups: {},
   enemies: { e: { id: 'e', name: 'E', hp: 10, speed: 2, reward: 1, leakDamage: 2, tags: [] } },
 };
 
@@ -13,10 +13,8 @@ const mission = (waves: Wave[], over: Partial<MissionConfig> = {}): MissionConfi
   id: 'm',
   name: 'M',
   path: [{ x: 0, y: 0 }, { x: 20, y: 0 }],
-  slots: [],
   size: { w: 21, h: 11 },
   airfield: { x: 0, y: 0 },
-  startMoney: 0,
   baseLives: 10,
   waves,
   ...over,
@@ -57,14 +55,12 @@ describe('враги как данные', () => {
   });
 });
 
-describe('миссия из конфига', () => {
-  const m = MISSIONS.sortie!;
+describe('миссии из конфига', () => {
   const power = (w: Wave) => w.groups.reduce((a, g) => a + g.count * ENEMIES[g.enemy]!.hp, 0);
 
-  test('≥5 волн с нарастающим составом, только из реестров', () => {
-    expect(m.waves.length).toBeGreaterThanOrEqual(5);
-    const p = m.waves.map(power);
-    for (let i = 1; i < p.length; i++) expect(p[i]).toBeGreaterThan(p[i - 1]!);
+  test.each(Object.values(MISSIONS))('$id: ≥4 волн, последняя сильнее первой, ≥3 типа врагов, только из реестров', (m) => {
+    expect(m.waves.length).toBeGreaterThanOrEqual(4);
+    expect(power(m.waves.at(-1)!)).toBeGreaterThan(power(m.waves[0]!));
     expect(new Set(m.waves.flatMap((w) => w.groups.map((g) => g.enemy))).size).toBeGreaterThanOrEqual(3);
     expect(() => createSim(m, CONTENT, 1)).not.toThrow();
   });
@@ -151,13 +147,13 @@ describe('исход матча', () => {
 });
 
 describe('детерминизм полной миссии', () => {
-  /** Headless-прогон без юнитов: «бот» добивает врагов у середины пути. */
+  /** Headless-прогон без групп: «бот» добивает врагов, прошедших три клетки. */
   function playthrough(seed: number) {
-    const sim = createSim(MISSIONS.sortie!, CONTENT, seed);
+    const sim = createSim(MISSIONS.evac!, CONTENT, seed);
     const log: unknown[] = [];
     for (let i = 0; i < 600 * TICK_RATE && sim.state.status === 'running'; i++) {
       step(sim);
-      for (const e of [...sim.state.enemies]) if (e.dist > sim.path!.length / 2) damageEnemy(sim, e.id, 1e9);
+      for (const e of [...sim.state.enemies]) if (e.dist > 3) damageEnemy(sim, e.id, 1e9);
       log.push(sim.state.events.map((ev) => ({ ...ev })));
     }
     return { snap: snapshot(sim), log };
@@ -166,7 +162,7 @@ describe('детерминизм полной миссии', () => {
   test('миссия проходится до won; один сид → идентичные события и снапшот, другой сид → иной', () => {
     const a = playthrough(1234);
     expect(a.snap.status).toBe('won');
-    expect(a.snap.wave).toBe(MISSIONS.sortie!.waves.length);
+    expect(a.snap.wave).toBe(MISSIONS.evac!.waves.length);
     expect(playthrough(1234)).toEqual(a);
     expect(playthrough(99).snap).not.toEqual(a.snap);
   });

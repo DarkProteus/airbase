@@ -1,12 +1,10 @@
 import { describe, expect, test } from 'vitest';
-import { CONTENT, MISSIONS, UNITS } from '../content';
+import { CONTENT, MISSIONS } from '../content';
 import { applyModifiers, createSim, damageEnemy, DT, pointAt, simTime, snapshot, step, TICK_RATE } from '.';
 import type { Content, MissionConfig } from '.';
 
 const content: Content = {
-  units: {
-    u: { id: 'u', name: 'U', role: 'test', cost: 100, tags: [], stats: { damage: 10 }, modifiers: [], upgrades: [] },
-  },
+  groups: {},
   enemies: {
     e: { id: 'e', name: 'E', hp: 10, speed: 2, reward: 7, leakDamage: 3, tags: [] },
     j: { id: 'j', name: 'J', hp: 10, speed: 2, speedVar: 0.5, reward: 1, leakDamage: 1, tags: [] },
@@ -21,10 +19,8 @@ const mission = (over: Partial<MissionConfig> = {}): MissionConfig => ({
     { x: 4, y: 0 },
     { x: 4, y: 4 },
   ],
-  slots: [{ x: 1, y: 1 }, { x: 2, y: 1 }],
   size: { w: 21, h: 11 },
   airfield: { x: 0, y: 0 },
-  startMoney: 150,
   baseLives: 5,
   waves: [{ prep: 1, groups: [{ enemy: 'e', count: 3, interval: 0.5 }] }],
   ...over,
@@ -106,37 +102,15 @@ describe('путь', () => {
   });
 });
 
-describe('деньги', () => {
-  test('стартовый бюджет и покупка', () => {
-    const sim = createSim(mission(), content, 1);
-    expect(sim.state.money).toBe(150);
-    step(sim, [{ type: 'buy', unit: 'u', slot: 0 }]);
-    expect(sim.state.money).toBe(50);
-    expect(sim.state.units).toMatchObject([{ type: 'u', slot: 0, level: 0 }]);
-  });
-
-  test('отказ при нехватке денег, занятом/несуществующем слоте, неизвестном юните', () => {
-    const sim = createSim(mission(), content, 1);
-    step(sim, [
-      { type: 'buy', unit: 'u', slot: 0 },
-      { type: 'buy', unit: 'u', slot: 0 },
-      { type: 'buy', unit: 'u', slot: 9 },
-      { type: 'buy', unit: 'x', slot: 1 },
-      { type: 'buy', unit: 'u', slot: 1 },
-    ]);
-    expect(sim.state.events.map((e) => (e.type === 'rejected' ? e.reason : e.type))).toEqual(['bought', 'slot', 'slot', 'unknown', 'money']);
-    expect(sim.state.money).toBe(50);
-    expect(sim.state.units).toHaveLength(1);
-  });
-
+describe('награда', () => {
   test('награда за убийство; победа после зачистки последней волны', () => {
     const sim = createSim(mission({ waves: [{ prep: 0, groups: [{ enemy: 'e', count: 1, interval: 0 }] }] }), content, 1);
     step(sim);
     const id = sim.state.enemies[0]!.id;
     expect(damageEnemy(sim, id, 4)).toBe(false);
-    expect(sim.state.money).toBe(150);
+    expect(sim.state.money).toBe(0);
     expect(damageEnemy(sim, id, 6)).toBe(true);
-    expect(sim.state.money).toBe(157);
+    expect(sim.state.money).toBe(7);
     step(sim);
     expect(sim.state.status).toBe('won');
   });
@@ -145,7 +119,6 @@ describe('деньги', () => {
 describe('детерминизм', () => {
   const play = (seed: number) => {
     const sim = createSim(mission({ waves: [{ prep: 0, groups: [{ enemy: 'j', count: 4, interval: 0.3 }] }] }), content, seed);
-    step(sim, [{ type: 'buy', unit: 'u', slot: 1 }]);
     run(sim, 2 * TICK_RATE);
     return snapshot(sim);
   };
@@ -176,11 +149,9 @@ describe('модификаторы', () => {
 });
 
 describe('контент', () => {
-  test('юнит-заглушка и миссия-прототип проходят через движок', () => {
-    const sim = createSim(MISSIONS.proto!, CONTENT, 7);
-    step(sim, [{ type: 'buy', unit: 'f16', slot: 0 }]);
-    expect(sim.state.money).toBe(MISSIONS.proto!.startMoney - UNITS.f16!.cost);
-    run(sim, 120 * TICK_RATE);
+  test.each(Object.values(MISSIONS))('миссия $id проходит через движок; без авиации цель не выживает', (m) => {
+    const sim = createSim(m, CONTENT, 7);
+    run(sim, 300 * TICK_RATE);
     expect(sim.state.status).toBe('lost');
   });
 });

@@ -5,7 +5,7 @@ import { Hud } from './game/Hud';
 import './game/game.css';
 
 /** Миссия по умолчанию; до экрана выбора (TASK-17) другую можно открыть параметром адреса `?mission=<id>`. */
-const MISSION = MISSIONS[new URLSearchParams(location.search).get('mission') ?? ''] ?? MISSIONS.sortie!;
+const MISSION = MISSIONS[new URLSearchParams(location.search).get('mission') ?? ''] ?? MISSIONS.evac!;
 
 export function App() {
   return (

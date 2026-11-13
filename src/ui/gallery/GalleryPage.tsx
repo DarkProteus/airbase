@@ -1,14 +1,14 @@
 import { useGalleryStore } from '../../store/gallery';
 import { EntityCard } from '../entity/EntityCard';
-import { formatModifier, viewUnit } from '../entity/model';
-import { UnitCard } from '../entity/UnitCard';
-import { CONTENT_REGISTRIES, collectTags, listEnemies, listUnits, modifierPool } from './catalog';
+import { GroupCard } from '../entity/GroupCard';
+import { formatModifier, viewGroup } from '../entity/model';
+import { CONTENT_REGISTRIES, collectTags, listEnemies, listGroups, modifierPool } from './catalog';
 import './gallery.css';
 
 /** Dev-галерея: всё, что описано реестрами контента, с переключателями параметров. */
 export function GalleryPage() {
   const { levels, activeModifiers, activeTags, setLevel, toggleModifier, toggleTag, reset } = useGalleryStore();
-  const units = listUnits();
+  const groups = listGroups();
   const enemies = listEnemies();
   const pool = modifierPool();
   const tags = collectTags();
@@ -43,14 +43,14 @@ export function GalleryPage() {
         </button>
       </section>
 
-      <section aria-label="Юниты">
-        <h2>Юниты ({units.length})</h2>
+      <section aria-label="Авиагруппы">
+        <h2>Авиагруппы ({groups.length})</h2>
         <div className="grid">
-          {units.map((u) => {
-            const view = viewUnit(u, levels[u.id] ?? 0, extra, activeTags);
+          {groups.map((u) => {
+            const view = viewGroup(u, levels[u.id] ?? 0, extra, activeTags);
             return (
               <div key={u.id} className="cell">
-                <UnitCard unit={u} view={view} />
+                <GroupCard group={u} view={view} />
                 <label className="level">
                   Уровень улучшения: {view.level}
                   <input
@@ -78,7 +78,7 @@ export function GalleryPage() {
       </section>
 
       <footer>
-        Реестры: units={Object.keys(CONTENT_REGISTRIES.units).length}, enemies=
+        Реестры: groups={Object.keys(CONTENT_REGISTRIES.groups).length}, enemies=
         {Object.keys(CONTENT_REGISTRIES.enemies).length}
       </footer>
     </main>

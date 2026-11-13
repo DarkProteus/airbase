@@ -24,9 +24,9 @@ import {
 import type { Material } from 'three';
 import { visualOf } from '../ui/entity/model';
 import type { PreviewShape } from '../ui/entity/model';
-import { DT, groupStats } from '../sim';
+import { DT, effectiveGroupStats } from '../sim';
 import type { Content, MissionConfig, SimState, Vec2, VisualConfig } from '../sim';
-import { cellToWorld, fitView, ISO_FORWARD, pickCell, slotIndexAt } from './coords';
+import { cellToWorld, fitView, ISO_FORWARD, pickCell } from './coords';
 import type { IsoView } from './coords';
 import { dyingScale, effectProgress, planEffects, recoilScale } from './effects';
 import type { EffectSpec, Vec3 } from './effects';
@@ -47,13 +47,8 @@ export interface SceneHandle {
 }
 
 export interface SceneOptions {
-  /** Клик по слоту размещения (индекс в mission.slots). */
-  onSlotClick?: (slot: number) => void;
-  /**
-   * Клик по любой клетке карты (раньше onSlotClick). Вернуть true — клик обработан, слот не срабатывает
-   * (так выбранная группа забирает клик себе).
-   */
-  onMapClick?: (cell: Vec2) => boolean | void;
+  /** Клик по клетке карты: выбранная группа получает туда зону. */
+  onMapClick?: (cell: Vec2) => void;
 }
 
 const COLORS = {
@@ -61,8 +56,6 @@ const COLORS = {
   ground: 0x2b3a2f,
   grid: 0x3c4f41,
   path: 0x8a7a55,
-  slot: 0x4f78a8,
-  slotHover: 0x8fc1f5,
   spawn: 0xb5533c,
   base: 0x3d9c6b,
   zoneSelected: 0xffd166,
@@ -173,16 +166,6 @@ export function createScene(
   strip.position.set(ap.x, 0.07, ap.z);
   map.add(apron, strip);
 
-  const slotMat = new MeshLambertMaterial({ color: COLORS.slot });
-  const slotMeshes: Mesh[] = mission.slots.map((s) => {
-    const m = new Mesh(new BoxGeometry(0.9, 0.08, 0.9), slotMat);
-    const p = cellToWorld(s, size);
-    m.position.set(p.x, 0.04, p.z);
-    map.add(m);
-    return m;
-  });
-  const hoverMat = new MeshLambertMaterial({ color: COLORS.slotHover });
-
   // --- динамика: сущности снапшота ---
   const geoCache = new Map<PreviewShape, BufferGeometry>();
   const matCache = new Map<string, Material>();
@@ -204,12 +187,6 @@ export function createScene(
     x: Tween;
     y: Tween;
   }
-  interface UnitEntry {
-    mesh: Mesh;
-    scale: number;
-    pos: Vec3;
-    recoilStart: number;
-  }
   interface Dying {
     mesh: Mesh;
     scale: number;
@@ -217,6 +194,9 @@ export function createScene(
   }
   interface GroupEntry {
     mesh: Mesh;
+    scale: number;
+    /** Момент последнего выстрела — для импульса отдачи. */
+    recoilStart: number;
     /** Высота полёта над землёй; на аэродроме (взлёт, перезарядка) — на земле. */
     lift: number;
     x: Tween;
@@ -231,7 +211,6 @@ export function createScene(
   const groups = new Map<number, GroupEntry>();
   let selectedGroup: number | null = null;
   const enemies = new Map<number, EnemyEntry>();
-  const units = new Map<number, UnitEntry>();
   const dying: Dying[] = [];
   const live: { spec: EffectSpec; obj: Mesh; mat: MeshBasicMaterial; start: number }[] = [];
   const dynamic = new Group();
@@ -306,7 +285,7 @@ export function createScene(
     live.push({ spec, obj, mat, start: now });
   };
 
-  /** Анимации по времени: движение врагов, отдача юнитов, гибель, эффекты. */
+  /** Анимации по времени: движение врагов и групп, отдача групп при выстреле, гибель, эффекты. */
   const animate = (now: number) => {
     placeGoal(now);
     for (const e of enemies.values()) {
@@ -316,10 +295,8 @@ export function createScene(
     for (const g of groups.values()) {
       const p = groupWorld(g, now);
       g.mesh.position.set(p.x, p.y, p.z);
-    }
-    for (const u of units.values()) {
-      const k = effectProgress(u.recoilStart, RECOIL_MS, now);
-      u.mesh.scale.setScalar(u.scale * (k === null ? 1 : recoilScale(k)));
+      const k = effectProgress(g.recoilStart, RECOIL_MS, now);
+      g.mesh.scale.setScalar(g.scale * (k === null ? 1 : recoilScale(k)));
     }
     for (let i = dying.length - 1; i >= 0; i--) {
       const d = dying[i]!;
@@ -341,15 +318,6 @@ export function createScene(
         f.mat.opacity = 0.9 * (1 - k);
       } else f.mat.opacity = 1 - k;
     }
-  };
-
-  let hovered = -1;
-  const setHover = (i: number) => {
-    if (i === hovered) return;
-    if (hovered >= 0) slotMeshes[hovered]!.material = slotMat;
-    hovered = i;
-    if (i >= 0) slotMeshes[i]!.material = hoverMat;
-    draw();
   };
 
   const draw = () => renderer.render(scene, camera);
@@ -374,21 +342,11 @@ export function createScene(
     const r = renderer.domElement.getBoundingClientRect();
     return pickCell({ x: e.clientX - r.left, y: e.clientY - r.top }, view, size);
   };
-  const slotAtEvent = (e: PointerEvent) => {
-    const cell = cellAtEvent(e);
-    return cell ? slotIndexAt(mission.slots, cell) : -1;
-  };
-  const onMove = (e: PointerEvent) => setHover(slotAtEvent(e));
-  const onLeave = () => setHover(-1);
   const onClick = (e: PointerEvent) => {
     const cell = cellAtEvent(e);
-    if (!cell || options.onMapClick?.(cell) === true) return;
-    const i = slotIndexAt(mission.slots, cell);
-    if (i >= 0) options.onSlotClick?.(i);
+    if (cell) options.onMapClick?.(cell);
   };
   const el = renderer.domElement;
-  el.addEventListener('pointermove', onMove);
-  el.addEventListener('pointerleave', onLeave);
   el.addEventListener('pointerup', onClick);
 
   let lastTick = -1;
@@ -423,29 +381,15 @@ export function createScene(
       goal.ratio = Math.max(0, Math.min(1, o.hp / goal.maxHp));
     }
 
-    const seenUnits = new Set<number>();
-    for (const u of state.units) {
-      seenUnits.add(u.id);
-      if (units.has(u.id)) continue;
-      const cfg = content.units[u.type];
-      const slot = mission.slots[u.slot];
-      if (!cfg || !slot) continue;
-      const { mesh, lift, scale } = bodyMesh({ role: cfg.role, tags: cfg.tags, visual: cfg.visual });
-      const p = cellToWorld(slot, size, 0.08 + lift);
-      mesh.position.set(p.x, p.y, p.z);
-      dynamic.add(mesh);
-      units.set(u.id, { mesh, scale, pos: p, recoilStart: -1e9 });
-    }
-
     const seenGroups = new Set<number>();
     for (const g of state.groups) {
       seenGroups.add(g.id);
-      const cfg = content.groups?.[g.type];
+      const cfg = content.groups[g.type];
       if (!cfg) continue;
       const onGround = g.phase === 'takeoff' || g.phase === 'rearm';
       let entry = groups.get(g.id);
       if (!entry) {
-        const { mesh, lift } = bodyMesh({ role: cfg.role, tags: cfg.tags, visual: cfg.visual });
+        const { mesh, lift, scale } = bodyMesh({ role: cfg.role, tags: cfg.tags, visual: cfg.visual });
         const zoneColor = new Color(cfg.visual?.color ?? '#ffffff');
         const zoneMat = new MeshBasicMaterial({ color: zoneColor, transparent: true, depthWrite: false });
         const ringMat = new MeshBasicMaterial({ color: zoneColor, transparent: true, depthWrite: false });
@@ -455,6 +399,8 @@ export function createScene(
         dynamic.add(mesh, zone, zoneRing);
         entry = {
           mesh,
+          scale,
+          recoilStart: -1e9,
           lift,
           x: retarget(undefined, g.pos.x, now, 0),
           y: retarget(undefined, g.pos.y, now, 0),
@@ -472,7 +418,8 @@ export function createScene(
         entry.y = retarget(entry.y, g.pos.y, now, duration);
         entry.onGround = onGround;
       }
-      const radius = groupStats({ content }, g).zoneRadius;
+      // Радиус с аурами союзников (например, ДРЛО) — тот же расчёт, что в sim.
+      const radius = effectiveGroupStats({ content, state }, g).zoneRadius;
       const zp = cellToWorld(g.zone, size, ZONE_Y);
       for (const m of [entry.zone, entry.zoneRing]) {
         m.position.set(zp.x, zp.y, zp.z);
@@ -483,7 +430,10 @@ export function createScene(
     // События снапшота -> эффекты; позиции врагов берутся до их удаления из сцены.
     if (isNew) {
       const plan = planEffects(state.events, {
-        unitPos: (id) => units.get(id)?.pos,
+        groupPos: (id) => {
+          const g = groups.get(id);
+          return g && groupWorld(g, now);
+        },
         enemyPos: (id) => {
           const e = enemies.get(id);
           return e && enemyWorld(e, now);
@@ -492,8 +442,8 @@ export function createScene(
       });
       for (const spec of plan.effects) spawnEffect(spec, now);
       for (const id of plan.fired) {
-        const u = units.get(id);
-        if (u) u.recoilStart = now;
+        const g = groups.get(id);
+        if (g) g.recoilStart = now;
       }
       for (const id of plan.killed) {
         const e = enemies.get(id);
@@ -518,11 +468,6 @@ export function createScene(
         entry.ringMat.dispose();
         groups.delete(id);
       }
-    for (const [id, entry] of units)
-      if (!seenUnits.has(id)) {
-        dynamic.remove(entry.mesh);
-        units.delete(id);
-      }
     animate(now);
     draw();
   };
@@ -541,8 +486,6 @@ export function createScene(
     for (const f of live) f.mat.dispose();
     live.length = 0;
     ro.disconnect();
-    el.removeEventListener('pointermove', onMove);
-    el.removeEventListener('pointerleave', onLeave);
     el.removeEventListener('pointerup', onClick);
     scene.traverse((o) => {
       if (o instanceof Mesh || o instanceof LineSegments) {
@@ -557,7 +500,6 @@ export function createScene(
     zoneRingGeo.dispose();
     for (const g of geoCache.values()) g.dispose();
     for (const m of matCache.values()) m.dispose();
-    hoverMat.dispose();
     renderer.dispose();
     renderer.domElement.remove();
   };

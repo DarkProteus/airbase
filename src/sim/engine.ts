@@ -1,10 +1,9 @@
-import { buyRejection, sellRefund, upgradeRejection, type RejectReason } from './economy';
+import type { RejectReason } from './economy';
 import { createObjective, objectiveOutcome, objectiveRoute, stepObjective, type ObjectiveState } from './objective';
 import { buildPath, pointAt, type PathData } from './path';
 import { rngNext } from './rng';
-import { createGroup, stepGroups, zoneRejection, type GroupState, type LineupEntry } from './sortie';
-import { applyModifiers } from './stats';
-import type { Content, MissionConfig, Modifier, Stats, Vec2 } from './types';
+import { auraSources, createGroup, enemySpeed, stepGroups, zoneRejection, type GroupState, type LineupEntry } from './sortie';
+import type { Content, MissionConfig, Vec2 } from './types';
 
 export const TICK_RATE = 30;
 export const DT = 1 / TICK_RATE;
@@ -20,47 +19,32 @@ export interface EnemyState {
   pos: Vec2;
 }
 
-export interface UnitState {
-  id: number;
-  type: string;
-  slot: number;
-  level: number;
-  /** Тиков до следующего выстрела. */
-  cooldown: number;
-}
-
 export type SimEvent =
   | { type: 'waveStart'; wave: number }
   | { type: 'spawn'; enemy: number }
   /** Враг дошёл: в миссии с целью урон идёт по прочности цели, без цели — по жизням базы. */
   | { type: 'leak'; enemy: number; damage: number }
   | { type: 'kill'; enemy: number; reward: number }
-  | { type: 'shot'; unit: number; enemy: number; damage: number }
   | { type: 'groupShot'; group: number; enemy: number; damage: number }
   /** Вылет завершён: группа вернулась на аэродром; sortie — номер вылета группы с 1. */
   | { type: 'sortieDone'; group: number; sortie: number }
   /** Центр зоны группы перенесён командой setZone. */
   | { type: 'zoneSet'; group: number; zone: Vec2 }
-  | { type: 'income'; amount: number }
-  | { type: 'bought'; unit: number }
-  | { type: 'upgraded'; unit: number; level: number }
-  | { type: 'sold'; unit: number; refund: number }
+  /** Бонус к награде миссии от группы за завершённый вылет (стат income). */
+  | { type: 'income'; group: number; amount: number }
   | { type: 'rejected'; command: Command; reason: RejectReason };
 
 /**
- * buy — купить юнит типа `unit` в слот; upgrade/sell — над юнитом матча по его id (UnitState.id);
  * setZone — центр зоны патрулирования группы (GroupState.id), радиус берётся из конфига группы.
  * Перенос действует сразу в фазах takeoff/transit/patrol; в return/rearm группа не меняет курс и учтёт зону на следующем вылете.
+ * Покупок и улучшений в бою нет: состав и уровни задаются при создании матча.
  */
-export type Command =
-  | { type: 'buy'; unit: string; slot: number }
-  | { type: 'upgrade'; unit: number }
-  | { type: 'sell'; unit: number }
-  | { type: 'setZone'; group: number; zone: Vec2 };
+export type Command = { type: 'setZone'; group: number; zone: Vec2 };
 
 export interface SimState {
   tick: number;
   rng: number;
+  /** Награда, заработанная в миссии: убийства и бонусы групп за вылеты. */
   money: number;
   lives: number;
   status: 'running' | 'won' | 'lost';
@@ -74,10 +58,9 @@ export interface SimState {
   nextSpawn: number;
   nextId: number;
   enemies: EnemyState[];
-  units: UnitState[];
   /** Авиагруппы на вылете: состав задаётся при создании матча и в бою не меняется. */
   groups: GroupState[];
-  /** Цель миссии; нет — турельная миссия с путём и жизнями базы. */
+  /** Цель миссии; нет — миссия с путём и жизнями базы. */
   objective?: ObjectiveState;
   /** События последнего тика. */
   events: SimEvent[];
@@ -121,7 +104,7 @@ export function createSim(mission: MissionConfig, content: Content, seed: number
     state: {
       tick: 0,
       rng: seed >>> 0,
-      money: mission.startMoney,
+      money: 0,
       lives: mission.baseLives,
       status: 'running',
       wave: 0,
@@ -130,7 +113,6 @@ export function createSim(mission: MissionConfig, content: Content, seed: number
       nextSpawn: 0,
       nextId: groups.length + 1,
       enemies: [],
-      units: [],
       groups,
       ...(objective ? { objective: createObjective(objective) } : {}),
       events: [],
@@ -147,34 +129,6 @@ function applyCommand(sim: Sim, cmd: Command): void {
   const s = sim.state;
   const reject = (reason: RejectReason) => void s.events.push({ type: 'rejected', command: cmd, reason });
   switch (cmd.type) {
-    case 'buy': {
-      const reason = buyRejection(sim, cmd.unit, cmd.slot);
-      if (reason) return reject(reason);
-      s.money -= sim.content.units[cmd.unit]!.cost;
-      const id = s.nextId++;
-      s.units.push({ id, type: cmd.unit, slot: cmd.slot, level: 0, cooldown: 0 });
-      s.events.push({ type: 'bought', unit: id });
-      return;
-    }
-    case 'upgrade': {
-      const reason = upgradeRejection(sim, cmd.unit);
-      if (reason) return reject(reason);
-      const u = s.units.find((x) => x.id === cmd.unit)!;
-      s.money -= sim.content.units[u.type]!.upgrades[u.level]!.cost;
-      u.level++;
-      s.events.push({ type: 'upgraded', unit: u.id, level: u.level });
-      return;
-    }
-    case 'sell': {
-      const i = s.units.findIndex((x) => x.id === cmd.unit);
-      const u = s.units[i];
-      if (!u) return reject('unknown');
-      const refund = sellRefund(sim, u);
-      s.units.splice(i, 1);
-      s.money += refund;
-      s.events.push({ type: 'sold', unit: u.id, refund });
-      return;
-    }
     case 'setZone': {
       const reason = zoneRejection(sim, cmd.group, cmd.zone);
       if (reason) return reject(reason);
@@ -200,41 +154,6 @@ export function damageEnemy(sim: Sim, enemyId: number, amount: number): boolean 
   return true;
 }
 
-/** Модификаторы, которые даёт юнит: постоянные + купленные уровни улучшений. */
-function ownMods(sim: Sim, u: UnitState): Modifier[] {
-  const cfg = sim.content.units[u.type]!;
-  return [...cfg.modifiers, ...cfg.upgrades.slice(0, u.level).flatMap((g) => g.modifiers)];
-}
-
-const reaches = (m: Modifier, from: Vec2, to: Vec2, tags: readonly string[]): boolean =>
-  (m.scope === 'global' || (m.scope === 'aura' && Math.hypot(from.x - to.x, from.y - to.y) <= (m.radius ?? 0))) &&
-  (m.tags ?? []).every((t) => tags.includes(t));
-
-/** Эффективные статы юнита: свои self-модификаторы + ауры/глобальные эффекты других юнитов, подходящие по тегам. */
-export function unitStats(sim: Sim, unit: UnitState): Stats {
-  const cfg = sim.content.units[unit.type]!;
-  const pos = sim.mission.slots[unit.slot]!;
-  const mods = ownMods(sim, unit).filter((m) => m.scope === 'self' && m.side !== 'enemy');
-  for (const o of sim.state.units) {
-    if (o.id === unit.id) continue;
-    const from = sim.mission.slots[o.slot]!;
-    for (const m of ownMods(sim, o)) if (m.side !== 'enemy' && reaches(m, from, pos, cfg.tags)) mods.push(m);
-  }
-  return applyModifiers(cfg.stats, mods);
-}
-
-/** Эффективная скорость врага с учётом вражеских модификаторов юнитов (side: 'enemy'). */
-export function enemySpeed(sim: Sim, enemy: EnemyState): number {
-  const tags = sim.content.enemies[enemy.type]!.tags;
-  const pos = enemy.pos;
-  const mods: Modifier[] = [];
-  for (const u of sim.state.units) {
-    const from = sim.mission.slots[u.slot]!;
-    for (const m of ownMods(sim, u)) if (m.side === 'enemy' && reaches(m, from, pos, tags)) mods.push(m);
-  }
-  return mods.length ? (applyModifiers({ speed: enemy.speed }, mods).speed ?? enemy.speed) : enemy.speed;
-}
-
 /** Радиус, с которого враг достаёт цель миссии, клеток. */
 export const OBJECTIVE_REACH = 0.3;
 
@@ -242,36 +161,6 @@ export const OBJECTIVE_REACH = 0.3;
 export function enemyThreat(sim: Sim, e: EnemyState): number {
   const o = sim.state.objective;
   return o ? -Math.hypot(e.pos.x - o.pos.x, e.pos.y - o.pos.y) : e.dist;
-}
-
-/** Юниты стреляют по самому опасному врагу в радиусе (см. enemyThreat); темп — fireRate выстрелов в секунду. */
-function fire(sim: Sim): void {
-  const s = sim.state;
-  for (const u of s.units) {
-    if (u.cooldown > 0) u.cooldown--;
-    if (u.cooldown > 0 || s.enemies.length === 0) continue;
-    const { damage = 0, range = 0, fireRate = 0 } = unitStats(sim, u);
-    if (damage <= 0 || fireRate <= 0) continue;
-    const pos = sim.mission.slots[u.slot]!;
-    let target: EnemyState | undefined;
-    for (const e of s.enemies) {
-      const p = e.pos;
-      if (Math.hypot(p.x - pos.x, p.y - pos.y) <= range && (!target || enemyThreat(sim, e) > enemyThreat(sim, target))) target = e;
-    }
-    if (!target) continue;
-    s.events.push({ type: 'shot', unit: u.id, enemy: target.id, damage });
-    damageEnemy(sim, target.id, damage);
-    u.cooldown = Math.max(1, Math.round(TICK_RATE / fireRate));
-  }
-}
-
-/** Доход между волнами: сумма income всех юнитов, начисляется при старте волны. */
-function grantIncome(sim: Sim): void {
-  let amount = 0;
-  for (const u of sim.state.units) amount += unitStats(sim, u).income ?? 0;
-  if (amount <= 0) return;
-  sim.state.money += amount;
-  sim.state.events.push({ type: 'income', amount });
 }
 
 /** Текущая волна идёт и все её спавны выполнены. */
@@ -292,7 +181,6 @@ function advancePhase(sim: Sim): void {
     s.phaseTick = 0;
     s.nextSpawn = 0;
     s.events.push({ type: 'waveStart', wave: s.wave++ });
-    grantIncome(sim);
   }
 }
 
@@ -314,12 +202,12 @@ export function step(sim: Sim, commands: readonly Command[] = []): void {
     s.events.push({ type: 'spawn', enemy: id });
   }
 
-  fire(sim);
   stepGroups(sim);
   const goal = s.objective;
   if (goal) stepObjective(sim.mission.objective!, sim.route, goal);
+  const sources = auraSources(sim);
   s.enemies = s.enemies.filter((e) => {
-    const stepLen = enemySpeed(sim, e) * DT;
+    const stepLen = enemySpeed(sim, e, sources) * DT;
     e.dist += stepLen;
     if (goal) {
       // Наведение: каждый тик курс берётся на текущую позицию цели, поэтому за подвижной целью враг доворачивает.

@@ -4,8 +4,8 @@ import type { Content, EnemyConfig, MissionConfig, ObjectiveConfig, SimEvent } f
 
 const enemy = (id: string, over: Partial<EnemyConfig> = {}): EnemyConfig => ({ id, name: id, hp: 100, speed: 5, reward: 1, leakDamage: 2, tags: ['air'], ...over });
 const content: Content = {
-  units: {
-    t: { id: 't', name: 'T', role: 'test', cost: 0, tags: [], stats: { damage: 1, range: 100, fireRate: 30 }, modifiers: [], upgrades: [] },
+  groups: {
+    t: { id: 't', name: 'T', role: 'test', cost: 0, tags: [], speed: 5, fuel: 100, ammo: 100, takeoffTime: 0, rearmTime: 1, zoneRadius: 100, weapons: [{ damage: 1, fireRate: 30, targetTags: [] }], auras: [], upgrades: [] },
   },
   enemies: { fast: enemy('fast'), slow: enemy('slow', { speed: 1 }), jitter: enemy('jitter', { speedVar: 0.5 }) },
 };
@@ -21,8 +21,6 @@ const mission = (objective: ObjectiveConfig, over: Partial<MissionConfig> = {}):
   airfield: { x: 0, y: 5 },
   objective,
   spawns: [{ x: 0, y: 5 }],
-  slots: [],
-  startMoney: 0,
   baseLives: 5,
   waves: [],
   ...over,
@@ -170,15 +168,15 @@ describe('наведение врагов на цель', () => {
   test('стрельба выбирает врага, который ближе к цели', () => {
     const m = mission({ ...DEFEND, duration: 100 }, {
       spawns: [{ x: 0, y: 5 }, { x: 14, y: 5 }],
-      slots: [{ x: 5, y: 5 }],
       waves: [{ prep: 0, groups: [{ enemy: 'slow', count: 1, interval: 0, spawn: 0 }, { enemy: 'slow', count: 1, interval: 0, spawn: 1 }] }],
     });
-    const sim = createSim(m, content, 1);
-    step(sim, [{ type: 'buy', unit: 't', slot: 0 }]);
-    const near = sim.state.enemies.find((e) => e.pos.x > 10)!;
+    const sim = createSim(m, content, 1, [{ group: 't', level: 0, zone: { x: 5, y: 5 } }]);
     step(sim);
-    const shots = sim.state.events.filter((e) => e.type === 'shot');
-    expect(shots).toEqual([{ type: 'shot', unit: expect.any(Number), enemy: near.id, damage: 1 }]);
+    const near = sim.state.enemies.find((e) => e.pos.x > 10)!;
+    while (sim.state.groups[0]!.phase !== 'patrol') step(sim);
+    step(sim);
+    const shots = sim.state.events.filter((e) => e.type === 'groupShot');
+    expect(shots).toEqual([{ type: 'groupShot', group: sim.state.groups[0]!.id, enemy: near.id, damage: 1 }]);
   });
 });
 

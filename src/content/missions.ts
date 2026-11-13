@@ -1,58 +1,5 @@
 import type { MissionConfig } from '../sim';
 
-const proto: MissionConfig = {
-  id: 'proto',
-  name: 'Прототип',
-  path: [
-    { x: 0, y: 4 },
-    { x: 6, y: 4 },
-    { x: 6, y: 9 },
-    { x: 12, y: 9 },
-  ],
-  slots: [
-    { x: 3, y: 3 },
-    { x: 5, y: 6 },
-    { x: 8, y: 8 },
-  ],
-  size: { w: 13, h: 11 },
-  airfield: { x: 12, y: 1 },
-  startMoney: 250,
-  baseLives: 10,
-  waves: [
-    { prep: 2, groups: [{ enemy: 'drone', count: 5, interval: 1 }] },
-    { prep: 9, groups: [{ enemy: 'drone', count: 10, interval: 0.6 }] },
-  ],
-};
-
-/** Миссия из 6 волн с нарастающим составом: новые типы врагов, смена правила старта, босс в конце. */
-const sortie: MissionConfig = {
-  id: 'sortie',
-  name: 'Вылет',
-  path: proto.path,
-  slots: [
-    { x: 2, y: 3 },
-    { x: 4, y: 5 },
-    { x: 5, y: 3 },
-    { x: 7, y: 5 },
-    { x: 5, y: 7 },
-    { x: 7, y: 8 },
-    { x: 8, y: 10 },
-    { x: 10, y: 8 },
-  ],
-  size: { w: 13, h: 11 },
-  airfield: proto.airfield,
-  startMoney: 300,
-  baseLives: 20,
-  waves: [
-    { prep: 10, groups: [{ enemy: 'drone', count: 6, interval: 1 }] },
-    { prep: 8, groups: [{ enemy: 'drone', count: 8, interval: 0.8 }, { enemy: 'runner', count: 4, interval: 0.5, delay: 4 }] },
-    { prep: 8, start: 'clear', groups: [{ enemy: 'tank', count: 3, interval: 2.5 }, { enemy: 'runner', count: 6, interval: 0.4, delay: 3 }] },
-    { prep: 10, groups: [{ enemy: 'drone', count: 12, interval: 0.5 }, { enemy: 'tank', count: 4, interval: 2, delay: 2 }] },
-    { prep: 10, start: 'clear', groups: [{ enemy: 'runner', count: 16, interval: 0.3 }, { enemy: 'tank', count: 6, interval: 1.5, delay: 3 }] },
-    { prep: 12, start: 'clear', groups: [{ enemy: 'bomber', count: 1, interval: 0 }, { enemy: 'tank', count: 6, interval: 1.2, delay: 4 }, { enemy: 'drone', count: 15, interval: 0.4, delay: 6 }] },
-  ],
-};
-
 /** Цель defend: удержать штаб до конца эвакуации; враги идут с трёх сторон, аэродром — в дальнем углу. */
 const evac: MissionConfig = {
   id: 'evac',
@@ -65,8 +12,6 @@ const evac: MissionConfig = {
     { x: 0, y: 9 },
     { x: 11, y: 10 },
   ],
-  slots: [],
-  startMoney: 0,
   baseLives: 1,
   waves: [
     { prep: 6, groups: [{ enemy: 'drone', count: 5, interval: 1.2, spawn: 0 }] },
@@ -92,7 +37,7 @@ const convoy: MissionConfig = {
       { x: 9, y: 9 },
       { x: 12, y: 9 },
     ],
-    hp: 20,
+    hp: 24,
     speed: 0.25,
   },
   spawns: [
@@ -100,8 +45,6 @@ const convoy: MissionConfig = {
     { x: 6, y: 10 },
     { x: 12, y: 5 },
   ],
-  slots: [],
-  startMoney: 0,
   baseLives: 1,
   waves: [
     { prep: 5, groups: [{ enemy: 'drone', count: 5, interval: 1.2, spawn: 0 }] },
@@ -112,8 +55,6 @@ const convoy: MissionConfig = {
 };
 
 export const MISSIONS: Record<string, MissionConfig> = {
-  [proto.id]: proto,
-  [sortie.id]: sortie,
   [evac.id]: evac,
   [convoy.id]: convoy,
 };
