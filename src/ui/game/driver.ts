@@ -1,5 +1,5 @@
 import { createSim, DT, snapshot, step } from '../../sim';
-import type { Command, Content, MissionConfig, SimEvent, SimState } from '../../sim';
+import type { Command, Content, LineupEntry, MissionConfig, SimEvent, SimState } from '../../sim';
 
 /**
  * Тонкий игровой цикл вне src/sim: аккумулятор реального времени -> целое число фиксированных шагов sim.
@@ -26,8 +26,9 @@ export function startGame(
   content: Content,
   seed: number,
   onSnapshot: (state: SimState) => void,
+  lineup: readonly LineupEntry[] = [],
 ): GameDriver {
-  const sim = createSim(mission, content, seed);
+  const sim = createSim(mission, content, seed, lineup);
   let queue: Command[] = [];
   let acc = 0;
   let last: number | null = null;

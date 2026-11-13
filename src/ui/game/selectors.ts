@@ -1,5 +1,5 @@
-import { buyRejection, nextUpgradeCost, sellRefund, upgradeRejection } from '../../sim';
-import type { Command, Content, MissionConfig, RejectReason, SimEvent, SimState, UnitConfig, UnitState, World } from '../../sim';
+import { buyRejection, groupStats, nextUpgradeCost, rearmTicksLeft, sellRefund, TICK_RATE, toTicks, upgradeRejection, zoneRejection } from '../../sim';
+import type { Command, Content, MissionConfig, RejectReason, SimEvent, SimState, SortiePhase, UnitConfig, UnitState, Vec2, World } from '../../sim';
 import { viewUnit } from '../entity/model';
 import type { UnitView } from '../entity/model';
 
@@ -15,6 +15,8 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   slot: 'Слот занят или недоступен',
   unknown: 'Юнит не найден',
   maxLevel: 'Максимальный уровень',
+  unknownGroup: 'Авиагруппа не найдена',
+  outOfMap: 'Зона вне карты',
 };
 
 export interface ShopItem {
@@ -84,4 +86,53 @@ export function hudLine(mission: MissionConfig, s: SimState): string {
   const parts = [`$ ${s.money}`, `жизни ${s.lives}`, `волна ${s.wave}/${mission.waves.length} (${PHASE_TEXT[s.phase]})`];
   if (s.status !== 'running') parts.push(STATUS_TEXT[s.status]);
   return parts.join(' · ');
+}
+
+export const PHASE_LABEL: Record<SortiePhase, string> = {
+  takeoff: 'взлёт',
+  transit: 'перелёт',
+  patrol: 'патруль',
+  return: 'возврат',
+  rearm: 'перезарядка',
+};
+
+/** Строка HUD по авиагруппе: всё из снапшота и конфига, секунды и доли — готовые к показу числа. */
+export interface GroupRow {
+  id: number;
+  name: string;
+  phase: SortiePhase;
+  phaseLabel: string;
+  /** Остаток топлива: секунды полёта и доля от полного бака (0..1). */
+  fuel: { seconds: number; ratio: number };
+  /** Остаток и максимум боекомплекта на вылет. */
+  ammo: { left: number; max: number };
+  /** Секунд до конца перезарядки; null вне фазы rearm. */
+  rearmSeconds: number | null;
+  /** Радиус зоны патрулирования в клетках (после модификаторов). */
+  zoneRadius: number;
+}
+
+export function groupRows(w: World): GroupRow[] {
+  return w.state.groups.map((g) => {
+    const st = groupStats(w, g);
+    const capacity = toTicks(st.fuel);
+    return {
+      id: g.id,
+      name: w.content.groups?.[g.type]?.name ?? g.type,
+      phase: g.phase,
+      phaseLabel: PHASE_LABEL[g.phase],
+      fuel: { seconds: g.fuel / TICK_RATE, ratio: capacity > 0 ? Math.min(1, g.fuel / capacity) : 0 },
+      ammo: { left: g.ammo, max: st.ammo },
+      rearmSeconds: g.phase === 'rearm' ? rearmTicksLeft(w, g) / TICK_RATE : null,
+      zoneRadius: st.zoneRadius,
+    };
+  });
+}
+
+export type ZoneAction = { command: Command; rejection: RejectReason | undefined };
+
+/** Клик по карте при выбранной группе: команда setZone и предсказанный теми же проверками sim отказ. null — группа не выбрана. */
+export function zoneClick(w: World, group: number | null, cell: Vec2): ZoneAction | null {
+  if (group === null) return null;
+  return { command: { type: 'setZone', group, zone: { x: cell.x, y: cell.y } }, rejection: zoneRejection(w, group, cell) };
 }

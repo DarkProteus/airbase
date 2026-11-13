@@ -4,8 +4,8 @@ import type { Content, MissionConfig } from './types';
 /** Доля вложенного (покупка + купленные улучшения), возвращаемая при продаже; округление вниз. */
 export const SELL_REFUND = 0.5;
 
-/** Причина отказа команды экономики. */
-export type RejectReason = 'money' | 'slot' | 'unknown' | 'maxLevel';
+/** Причина отказа команды: экономика (money…maxLevel) и зоны патрулирования (unknownGroup, outOfMap). */
+export type RejectReason = 'money' | 'slot' | 'unknown' | 'maxLevel' | 'unknownGroup' | 'outOfMap';
 
 /** Всё, что нужно проверкам: Sim подходит как есть, UI собирает из миссии, контента и снапшота. */
 export interface World {

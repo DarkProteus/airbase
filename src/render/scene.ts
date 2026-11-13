@@ -2,6 +2,7 @@ import {
   AmbientLight,
   BoxGeometry,
   BufferGeometry,
+  CircleGeometry,
   Color,
   ConeGeometry,
   CylinderGeometry,
@@ -14,6 +15,7 @@ import {
   MeshBasicMaterial,
   MeshLambertMaterial,
   OrthographicCamera,
+  RingGeometry,
   Scene,
   SphereGeometry,
   Vector3,
@@ -22,8 +24,8 @@ import {
 import type { Material } from 'three';
 import { visualOf } from '../ui/entity/model';
 import type { PreviewShape } from '../ui/entity/model';
-import { buildPath, DT, pointAt } from '../sim';
-import type { Content, MissionConfig, SimState, VisualConfig } from '../sim';
+import { buildPath, DT, groupStats, pointAt } from '../sim';
+import type { Content, MissionConfig, SimState, Vec2, VisualConfig } from '../sim';
 import { cellToWorld, fitView, ISO_FORWARD, pickCell, slotIndexAt } from './coords';
 import type { IsoView } from './coords';
 import { dyingScale, effectProgress, planEffects, recoilScale } from './effects';
@@ -39,12 +41,19 @@ import type { Tween } from './motion';
 export interface SceneHandle {
   /** Нарисовать сущности снапшота. */
   update(state: SimState): void;
+  /** Выделить зону группы (GroupState.id); null — снять выделение. */
+  setSelectedGroup(group: number | null): void;
   dispose(): void;
 }
 
 export interface SceneOptions {
   /** Клик по слоту размещения (индекс в mission.slots). */
   onSlotClick?: (slot: number) => void;
+  /**
+   * Клик по любой клетке карты (раньше onSlotClick). Вернуть true — клик обработан, слот не срабатывает
+   * (так выбранная группа забирает клик себе).
+   */
+  onMapClick?: (cell: Vec2) => boolean | void;
 }
 
 const COLORS = {
@@ -56,6 +65,7 @@ const COLORS = {
   slotHover: 0x8fc1f5,
   spawn: 0xb5533c,
   base: 0x3d9c6b,
+  zoneSelected: 0xffd166,
 };
 
 const CAMERA_DISTANCE = 40;
@@ -185,6 +195,21 @@ export function createScene(
     scale: number;
     start: number;
   }
+  interface GroupEntry {
+    mesh: Mesh;
+    /** Высота полёта над землёй; на аэродроме (взлёт, перезарядка) — на земле. */
+    lift: number;
+    x: Tween;
+    y: Tween;
+    onGround: boolean;
+    zone: Mesh;
+    zoneRing: Mesh;
+    zoneMat: MeshBasicMaterial;
+    ringMat: MeshBasicMaterial;
+    zoneColor: Color;
+  }
+  const groups = new Map<number, GroupEntry>();
+  let selectedGroup: number | null = null;
   const enemies = new Map<number, EnemyEntry>();
   const units = new Map<number, UnitEntry>();
   const dying: Dying[] = [];
@@ -203,6 +228,20 @@ export function createScene(
 
   const enemyWorld = (e: EnemyEntry, now: number): Vec3 =>
     cellToWorld(pointAt(path, tweenValue(e.dist, now)), size, e.lift);
+
+  // Круг зоны: единичный диск и кольцо в плоскости земли, масштабируются до радиуса группы.
+  const zoneDiscGeo = new CircleGeometry(1, 48).rotateX(-Math.PI / 2);
+  const zoneRingGeo = new RingGeometry(0.94, 1, 64).rotateX(-Math.PI / 2);
+  const ZONE_Y = 0.1;
+  const groupWorld = (g: GroupEntry, now: number): Vec3 =>
+    cellToWorld({ x: tweenValue(g.x, now), y: tweenValue(g.y, now) }, size, g.onGround ? 0.08 : g.lift);
+  const paintZone = (g: GroupEntry, selected: boolean) => {
+    const c = selected ? COLORS.zoneSelected : g.zoneColor;
+    g.zoneMat.color.set(c);
+    g.ringMat.color.set(c);
+    g.zoneMat.opacity = selected ? 0.22 : 0.1;
+    g.ringMat.opacity = selected ? 1 : 0.6;
+  };
 
   const spawnEffect = (spec: EffectSpec, now: number) => {
     const mat = new MeshBasicMaterial({ color: spec.color, transparent: true, depthWrite: false });
@@ -225,6 +264,10 @@ export function createScene(
     for (const e of enemies.values()) {
       const p = enemyWorld(e, now);
       e.mesh.position.set(p.x, p.y, p.z);
+    }
+    for (const g of groups.values()) {
+      const p = groupWorld(g, now);
+      g.mesh.position.set(p.x, p.y, p.z);
     }
     for (const u of units.values()) {
       const k = effectProgress(u.recoilStart, RECOIL_MS, now);
@@ -279,15 +322,20 @@ export function createScene(
   ro.observe(container);
   resize();
 
-  const slotAtEvent = (e: PointerEvent) => {
+  const cellAtEvent = (e: PointerEvent): Vec2 | null => {
     const r = renderer.domElement.getBoundingClientRect();
-    const cell = pickCell({ x: e.clientX - r.left, y: e.clientY - r.top }, view, size);
+    return pickCell({ x: e.clientX - r.left, y: e.clientY - r.top }, view, size);
+  };
+  const slotAtEvent = (e: PointerEvent) => {
+    const cell = cellAtEvent(e);
     return cell ? slotIndexAt(mission.slots, cell) : -1;
   };
   const onMove = (e: PointerEvent) => setHover(slotAtEvent(e));
   const onLeave = () => setHover(-1);
   const onClick = (e: PointerEvent) => {
-    const i = slotAtEvent(e);
+    const cell = cellAtEvent(e);
+    if (!cell || options.onMapClick?.(cell) === true) return;
+    const i = slotIndexAt(mission.slots, cell);
     if (i >= 0) options.onSlotClick?.(i);
   };
   const el = renderer.domElement;
@@ -329,6 +377,49 @@ export function createScene(
       units.set(u.id, { mesh, scale, pos: p, recoilStart: -1e9 });
     }
 
+    const seenGroups = new Set<number>();
+    for (const g of state.groups) {
+      seenGroups.add(g.id);
+      const cfg = content.groups?.[g.type];
+      if (!cfg) continue;
+      const onGround = g.phase === 'takeoff' || g.phase === 'rearm';
+      let entry = groups.get(g.id);
+      if (!entry) {
+        const { mesh, lift } = bodyMesh({ role: cfg.role, tags: cfg.tags, visual: cfg.visual });
+        const zoneColor = new Color(cfg.visual?.color ?? '#ffffff');
+        const zoneMat = new MeshBasicMaterial({ color: zoneColor, transparent: true, depthWrite: false });
+        const ringMat = new MeshBasicMaterial({ color: zoneColor, transparent: true, depthWrite: false });
+        const zone = new Mesh(zoneDiscGeo, zoneMat);
+        const zoneRing = new Mesh(zoneRingGeo, ringMat);
+        zone.renderOrder = zoneRing.renderOrder = 1;
+        dynamic.add(mesh, zone, zoneRing);
+        entry = {
+          mesh,
+          lift,
+          x: retarget(undefined, g.pos.x, now, 0),
+          y: retarget(undefined, g.pos.y, now, 0),
+          onGround,
+          zone,
+          zoneRing,
+          zoneMat,
+          ringMat,
+          zoneColor,
+        };
+        groups.set(g.id, entry);
+        paintZone(entry, selectedGroup === g.id);
+      } else if (isNew) {
+        entry.x = retarget(entry.x, g.pos.x, now, duration);
+        entry.y = retarget(entry.y, g.pos.y, now, duration);
+        entry.onGround = onGround;
+      }
+      const radius = groupStats({ content }, g).zoneRadius;
+      const zp = cellToWorld(g.zone, size, ZONE_Y);
+      for (const m of [entry.zone, entry.zoneRing]) {
+        m.position.set(zp.x, zp.y, zp.z);
+        m.scale.set(radius, 1, radius);
+      }
+    }
+
     // События снапшота -> эффекты; позиции врагов берутся до их удаления из сцены.
     if (isNew) {
       const plan = planEffects(state.events, {
@@ -359,6 +450,13 @@ export function createScene(
       if (!seenEnemies.has(id)) {
         dynamic.remove(entry.mesh);
         enemies.delete(id);
+      }
+    for (const [id, entry] of groups)
+      if (!seenGroups.has(id)) {
+        dynamic.remove(entry.mesh, entry.zone, entry.zoneRing);
+        entry.zoneMat.dispose();
+        entry.ringMat.dispose();
+        groups.delete(id);
       }
     for (const [id, entry] of units)
       if (!seenUnits.has(id)) {
@@ -395,6 +493,8 @@ export function createScene(
     });
     tracerGeo.dispose();
     burstGeo.dispose();
+    zoneDiscGeo.dispose();
+    zoneRingGeo.dispose();
     for (const g of geoCache.values()) g.dispose();
     for (const m of matCache.values()) m.dispose();
     hoverMat.dispose();
@@ -402,5 +502,12 @@ export function createScene(
     renderer.domElement.remove();
   };
 
-  return { update, dispose };
+  const setSelectedGroup = (group: number | null) => {
+    if (group === selectedGroup) return;
+    selectedGroup = group;
+    for (const [id, entry] of groups) paintZone(entry, id === group);
+    draw();
+  };
+
+  return { update, setSelectedGroup, dispose };
 }

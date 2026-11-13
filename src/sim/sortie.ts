@@ -1,3 +1,4 @@
+import type { RejectReason, World } from './economy';
 import { damageEnemy, DT, TICK_RATE, type EnemyState, type Sim } from './engine';
 import { pointAt } from './path';
 import { applyModifiers } from './stats';
@@ -43,7 +44,8 @@ export interface GroupStats {
 }
 
 const EPS = 1e-9;
-const ticks = (seconds: number): number => Math.max(0, Math.round(seconds * TICK_RATE));
+/** Секунды -> целые тики (округление к ближайшему). */
+export const toTicks = (seconds: number): number => Math.max(0, Math.round(seconds * TICK_RATE));
 const dist = (a: Vec2, b: Vec2): number => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** Клетка лежит на границе сетки карты. */
@@ -52,6 +54,16 @@ export const onMapEdge = (size: MissionConfig['size'], p: Vec2): boolean =>
 
 export const inMap = (size: MissionConfig['size'], p: Vec2): boolean =>
   p.x >= 0 && p.y >= 0 && p.x <= size.w - 1 && p.y <= size.h - 1;
+
+/**
+ * Проверка команды setZone: группа должна быть в матче, центр зоны — на карте (радиус зоны не ограничен картой).
+ * Движок применяет команду только при успехе, UI вызывает ту же функцию для подсказок.
+ */
+export function zoneRejection(w: Pick<World, 'mission' | 'state'>, group: number, zone: Vec2): RejectReason | undefined {
+  if (!w.state.groups.some((g) => g.id === group)) return 'unknownGroup';
+  if (!Number.isFinite(zone.x) || !Number.isFinite(zone.y) || !inMap(w.mission.size, zone)) return 'outOfMap';
+  return undefined;
+}
 
 function groupConfig(content: Content, type: string): AirGroupConfig {
   const cfg = content.groups?.[type];
@@ -95,11 +107,17 @@ export function createGroup(mission: MissionConfig, content: Content, entry: Lin
     phase: 'takeoff',
     phaseTick: 0,
     pos: { ...mission.airfield },
-    fuel: ticks(st.fuel),
+    fuel: toTicks(st.fuel),
     ammo: st.ammo,
     cooldowns: cfg.weapons.map(() => 0),
     sorties: 0,
   };
+}
+
+/** Сколько тиков осталось до конца перезарядки; 0 вне фазы rearm. Конец — тот же порог, что в stepGroups (минимум один тик). */
+export function rearmTicksLeft(w: { readonly content: Content }, g: GroupState): number {
+  if (g.phase !== 'rearm') return 0;
+  return Math.max(0, toTicks(groupStats(w, g).rearmTime) - g.phaseTick);
 }
 
 function setPhase(g: GroupState, phase: SortiePhase): void {
@@ -158,7 +176,7 @@ export function stepGroups(sim: Sim): void {
     const bingo = () => g.fuel <= flightTicks(g.pos, home, st.speed);
     switch (g.phase) {
       case 'takeoff':
-        if (g.phaseTick >= ticks(cfg.takeoffTime)) setPhase(g, 'transit');
+        if (g.phaseTick >= toTicks(cfg.takeoffTime)) setPhase(g, 'transit');
         break;
       case 'transit':
         g.fuel--;
@@ -181,8 +199,8 @@ export function stepGroups(sim: Sim): void {
         }
         break;
       case 'rearm':
-        if (g.phaseTick >= ticks(st.rearmTime)) {
-          g.fuel = ticks(st.fuel);
+        if (g.phaseTick >= toTicks(st.rearmTime)) {
+          g.fuel = toTicks(st.fuel);
           g.ammo = st.ammo;
           setPhase(g, 'takeoff');
         }

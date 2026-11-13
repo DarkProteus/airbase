@@ -1,7 +1,7 @@
 import { buyRejection, sellRefund, upgradeRejection, type RejectReason } from './economy';
 import { buildPath, pointAt, type PathData } from './path';
 import { rngNext } from './rng';
-import { createGroup, stepGroups, type GroupState, type LineupEntry } from './sortie';
+import { createGroup, stepGroups, zoneRejection, type GroupState, type LineupEntry } from './sortie';
 import { applyModifiers } from './stats';
 import type { Content, MissionConfig, Modifier, Stats, Vec2 } from './types';
 
@@ -35,17 +35,24 @@ export type SimEvent =
   | { type: 'groupShot'; group: number; enemy: number; damage: number }
   /** Вылет завершён: группа вернулась на аэродром; sortie — номер вылета группы с 1. */
   | { type: 'sortieDone'; group: number; sortie: number }
+  /** Центр зоны группы перенесён командой setZone. */
+  | { type: 'zoneSet'; group: number; zone: Vec2 }
   | { type: 'income'; amount: number }
   | { type: 'bought'; unit: number }
   | { type: 'upgraded'; unit: number; level: number }
   | { type: 'sold'; unit: number; refund: number }
   | { type: 'rejected'; command: Command; reason: RejectReason };
 
-/** buy — купить юнит типа `unit` в слот; upgrade/sell — над юнитом матча по его id (UnitState.id). */
+/**
+ * buy — купить юнит типа `unit` в слот; upgrade/sell — над юнитом матча по его id (UnitState.id);
+ * setZone — центр зоны патрулирования группы (GroupState.id), радиус берётся из конфига группы.
+ * Перенос действует сразу в фазах takeoff/transit/patrol; в return/rearm группа не меняет курс и учтёт зону на следующем вылете.
+ */
 export type Command =
   | { type: 'buy'; unit: string; slot: number }
   | { type: 'upgrade'; unit: number }
-  | { type: 'sell'; unit: number };
+  | { type: 'sell'; unit: number }
+  | { type: 'setZone'; group: number; zone: Vec2 };
 
 export interface SimState {
   tick: number;
@@ -150,6 +157,14 @@ function applyCommand(sim: Sim, cmd: Command): void {
       s.units.splice(i, 1);
       s.money += refund;
       s.events.push({ type: 'sold', unit: u.id, refund });
+      return;
+    }
+    case 'setZone': {
+      const reason = zoneRejection(sim, cmd.group, cmd.zone);
+      if (reason) return reject(reason);
+      const g = s.groups.find((x) => x.id === cmd.group)!;
+      g.zone = { x: cmd.zone.x, y: cmd.zone.y };
+      s.events.push({ type: 'zoneSet', group: g.id, zone: { ...g.zone } });
     }
   }
 }

@@ -278,3 +278,109 @@ describe('события и детерминизм', () => {
     expect(play(8)).not.toEqual(a);
   });
 });
+
+describe('команда setZone', () => {
+  const setZone = (sim: ReturnType<typeof createSim>, zone: { x: number; y: number }, groupId = sim.state.groups[0]!.id) =>
+    step(sim, [{ type: 'setZone', group: groupId, zone }]);
+  /** Шагает до патруля (или иной фазы) и возвращает позицию группы в момент входа. */
+  const reach = (sim: ReturnType<typeof createSim>, phase: SortiePhase) => {
+    until(sim, phase);
+    return sim.state.groups[0]!;
+  };
+
+  test('команда задаёт центр зоны и шлёт событие; радиус зоны остаётся из конфига', () => {
+    const sim = createSim(mission(), content(), 1, [at(6)]);
+    const g = sim.state.groups[0]!;
+    setZone(sim, { x: 9, y: 2 });
+    expect(g.zone).toEqual({ x: 9, y: 2 });
+    expect(sim.state.events).toContainEqual({ type: 'zoneSet', group: g.id, zone: { x: 9, y: 2 } });
+    expect(groupStats(sim, g).zoneRadius).toBe(2);
+  });
+
+  test('во время взлёта: зона применяется к перелёту', () => {
+    const sim = createSim(mission(), content(), 1, [at(6)]);
+    setZone(sim, { x: 6, y: 9 });
+    const g = reach(sim, 'patrol');
+    expect(g.pos).toEqual({ x: 6, y: 9 });
+  });
+
+  test('во время перелёта: группа сразу меняет курс, фаза остаётся перелётом', () => {
+    const sim = createSim(mission(), content(), 1, [at(12)]);
+    const g = reach(sim, 'transit');
+    for (let i = 0; i < 10; i++) step(sim);
+    const before = { ...g.pos };
+    setZone(sim, { x: 4, y: 10 });
+    // Тот же тик уже летит к новой точке: по y вниз, а не по прямой к старой зоне.
+    expect(g.phase).toBe('transit');
+    expect(g.pos.y).toBeGreaterThan(before.y);
+    reach(sim, 'patrol');
+    expect(g.pos).toEqual({ x: 4, y: 10 });
+  });
+
+  test('во время патруля: группа сразу уходит в перелёт к новой зоне и патрулирует её', () => {
+    const sim = createSim(mission(), content(), 1, [at(6)]);
+    const g = reach(sim, 'patrol');
+    expect(g.pos).toEqual({ x: 6, y: 5 });
+    setZone(sim, { x: 12, y: 5 });
+    expect(g.phase).toBe('transit');
+    expect(g.pos.x).toBeGreaterThan(6);
+    const fuel = g.fuel;
+    until(sim, 'patrol');
+    expect(g.pos).toEqual({ x: 12, y: 5 });
+    expect(g.fuel).toBeLessThan(fuel);
+  });
+
+  test('во время возврата: курс не меняется, зона учтётся в следующем вылете', () => {
+    const sim = createSim(mission(), content(), 1, [at(6)]);
+    const g = reach(sim, 'return');
+    setZone(sim, { x: 3, y: 9 });
+    expect(g.phase).toBe('return');
+    expect(g.zone).toEqual({ x: 3, y: 9 });
+    step(sim);
+    expect(g.pos.y).toBe(5); // всё ещё домой по прямой, не к новой зоне
+    until(sim, 'rearm');
+    expect(g.pos).toEqual({ x: 0, y: 5 });
+    until(sim, 'takeoff');
+    expect(reach(sim, 'patrol').pos).toEqual({ x: 3, y: 9 });
+    expect(g.sorties).toBe(1);
+  });
+
+  test('во время перезарядки: зона применяется к следующему вылету', () => {
+    const sim = createSim(mission(), content(), 1, [at(6)]);
+    const g = reach(sim, 'rearm');
+    setZone(sim, { x: 9, y: 1 });
+    expect(g.phase).toBe('rearm');
+    expect(g.pos).toEqual({ x: 0, y: 5 });
+    until(sim, 'takeoff');
+    expect(g.fuel).toBe(20 * TICK_RATE);
+    expect(reach(sim, 'patrol').pos).toEqual({ x: 9, y: 1 });
+  });
+
+  test('зона вне карты отклоняется событием с причиной, зона не меняется', () => {
+    const sim = createSim(mission(), content(), 1, [at(6)]);
+    const g = sim.state.groups[0]!;
+    for (const zone of [{ x: -1, y: 5 }, { x: 21, y: 5 }, { x: 5, y: 11 }, { x: 5, y: -0.5 }, { x: NaN, y: 3 }]) {
+      const cmd = { type: 'setZone' as const, group: g.id, zone };
+      step(sim, [cmd]);
+      expect(sim.state.events).toContainEqual({ type: 'rejected', command: cmd, reason: 'outOfMap' });
+      expect(g.zone).toEqual({ x: 6, y: 5 });
+    }
+    // Граница карты — внутри.
+    setZone(sim, { x: 20, y: 10 });
+    expect(g.zone).toEqual({ x: 20, y: 10 });
+  });
+
+  test('неизвестная группа отклоняется событием с причиной, остальные группы не затронуты', () => {
+    const sim = createSim(mission(), content(), 1, [at(6)]);
+    const cmd = { type: 'setZone' as const, group: 99, zone: { x: 3, y: 3 } };
+    step(sim, [cmd]);
+    expect(sim.state.events).toEqual([{ type: 'rejected', command: cmd, reason: 'unknownGroup' }]);
+    expect(sim.state.groups[0]!.zone).toEqual({ x: 6, y: 5 });
+  });
+
+  test('группы переносятся независимо', () => {
+    const sim = createSim(mission(), content([group(), group({ id: 'h' })]), 1, [at(6), at(8, 2, 0, 'h')]);
+    setZone(sim, { x: 4, y: 4 }, sim.state.groups[1]!.id);
+    expect(sim.state.groups.map((g) => g.zone)).toEqual([{ x: 6, y: 5 }, { x: 4, y: 4 }]);
+  });
+});
