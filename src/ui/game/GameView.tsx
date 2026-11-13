@@ -1,16 +1,16 @@
 import { useEffect, useRef } from 'react';
-import { CONTENT, DEFAULT_LINEUP } from '../../content';
+import { CONTENT } from '../../content';
 import { createScene } from '../../render';
 import { useGameStore } from '../../store/game';
 import { startGame } from './driver';
 import { GroupPanel } from './GroupPanel';
 import { groupRows, REJECT_TEXT, rejectionNotice, world, zoneClick } from './selectors';
-import type { MissionConfig } from '../../sim';
+import type { LineupEntry, MissionConfig } from '../../sim';
 
 const SEED = 1;
 
-/** Холст карты и панель авиагрупп. Игра мутируется только командами sim через драйвер. */
-export function GameView({ mission }: { mission: MissionConfig }) {
+/** Холст карты и панель авиагрупп; `lineup` держать стабильным (смена перезапускает бой). Игра мутируется только командами sim через драйвер. */
+export function GameView({ mission, lineup }: { mission: MissionConfig; lineup: readonly LineupEntry[] }) {
   const host = useRef<HTMLDivElement>(null);
   const snapshot = useGameStore((st) => st.snapshot);
   const selectedGroup = useGameStore((st) => st.selectedGroup);
@@ -19,7 +19,7 @@ export function GameView({ mission }: { mission: MissionConfig }) {
     const el = host.current;
     if (!el) return;
     const { setSnapshot, setNotice, selectGroup } = useGameStore.getState();
-    const game = startGame(mission, CONTENT, SEED, setSnapshot, DEFAULT_LINEUP);
+    const game = startGame(mission, CONTENT, SEED, setSnapshot, lineup);
     const scene = createScene(el, mission, CONTENT, {
       // Выбрана группа — клик по карте ставит или переносит её зону.
       onMapClick: (cell) => {
@@ -53,7 +53,7 @@ export function GameView({ mission }: { mission: MissionConfig }) {
       scene.dispose();
       setSnapshot(null);
     };
-  }, [mission]);
+  }, [mission, lineup]);
 
   const store = useGameStore.getState;
   return (

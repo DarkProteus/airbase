@@ -1,4 +1,4 @@
-import type { AirGroupConfig, LineupEntry } from '../sim';
+import type { AirGroupConfig } from '../sim';
 
 /** Истребитель: быстрый, бьёт только воздушные цели. */
 const f16: AirGroupConfig = {
@@ -95,10 +95,3 @@ export const GROUPS: Record<string, AirGroupConfig> = {
 
 /** Сколько групп игрок берёт на вылет. */
 export const LINEUP_SIZE = 3;
-
-/** Стартовый состав до экрана базы (TASK-16): зоны у целей обеих миссий (карта 13×11). */
-export const DEFAULT_LINEUP: LineupEntry[] = [
-  { group: 'f16', level: 0, zone: { x: 4, y: 5 } },
-  { group: 'a10', level: 0, zone: { x: 5, y: 6 } },
-  { group: 'growler', level: 0, zone: { x: 5, y: 5 } },
-];

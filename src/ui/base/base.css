@@ -1,0 +1,42 @@
+.base {
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  padding: 16px 24px 32px;
+  background: #10151c;
+  color: #dfe6ee;
+  font-family: system-ui, sans-serif;
+}
+.base-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  margin-bottom: 16px;
+}
+.base-header h1 { margin: 0; font-size: 20px; }
+.base-currency strong { color: #ffd166; }
+.base-lineup strong { color: #9fd0ff; }
+.base-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.base-slot { opacity: 0.8; }
+.base-slot[data-owned='true'] { opacity: 1; }
+.base-slot[data-lineup='true'] .card { border-color: #ffd166; }
+.base-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.base-action { display: flex; align-items: center; gap: 10px; }
+.base-header .base-action { margin-left: auto; }
+.base button {
+  padding: 5px 12px;
+  background: #2c3750;
+  border: 1px solid #44527a;
+  border-radius: 6px;
+  color: #dfe6f3;
+  font: inherit;
+  cursor: pointer;
+}
+.base button:hover:not(:disabled) { background: #384568; }
+.base button:disabled { opacity: 0.45; cursor: not-allowed; }
+.base-reason { font-size: 12px; color: #ff9aa5; }

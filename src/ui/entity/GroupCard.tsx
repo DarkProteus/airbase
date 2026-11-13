@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { AirGroupConfig, GroupStats } from '../../sim';
 import { EntityPreview } from './EntityPreview';
 import { formatModifier, viewGroup } from './model';
@@ -9,6 +10,8 @@ interface Props {
   /** Готовый расчёт (например, из песочницы галереи). Без него — уровень 0 без модификаторов. */
   view?: GroupView;
   onClick?: () => void;
+  /** Действия под карточкой (кнопки базы); галерея их не передаёт. */
+  actions?: ReactNode;
 }
 
 const fmt = (n: number) => String(Math.round(n * 100) / 100);
@@ -26,7 +29,7 @@ const ROWS: { label: string; key: Exclude<keyof GroupStats, 'weapons'> }[] = [
 const delta = (cur: number, base: number) => (cur > base ? 'up' : cur < base ? 'down' : '');
 
 /** Универсальная карточка авиагруппы: строится только из AirGroupConfig (+ расчёта viewGroup). */
-export function GroupCard({ group, view = viewGroup(group), onClick }: Props) {
+export function GroupCard({ group, view = viewGroup(group), onClick, actions }: Props) {
   const { stats, baseStats } = view;
   return (
     <article className="card" data-testid="group-card" data-id={group.id} onClick={onClick}>
@@ -78,6 +81,7 @@ export function GroupCard({ group, view = viewGroup(group), onClick }: Props) {
           ур. {view.level}/{view.maxLevel}
           {view.nextUpgradeCost !== undefined && <span> · след. {view.nextUpgradeCost}</span>}
         </div>
+        {actions}
       </div>
     </article>
   );

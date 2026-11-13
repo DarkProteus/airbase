@@ -2,6 +2,7 @@ export * from './economy';
 export * from './engine';
 export * from './objective';
 export * from './path';
+export * from './profile';
 export * from './rng';
 export * from './sortie';
 export * from './stats';
