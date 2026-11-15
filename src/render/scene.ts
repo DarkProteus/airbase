@@ -7,14 +7,13 @@ import {
   ConeGeometry,
   CylinderGeometry,
   DirectionalLight,
-  Float32BufferAttribute,
   Group,
-  LineBasicMaterial,
   LineSegments,
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
   OrthographicCamera,
+  PCFShadowMap,
   PlaneGeometry,
   RingGeometry,
   Scene,
@@ -27,10 +26,14 @@ import { visualOf } from '../ui/entity/model';
 import { attackLinks, enemyMarks, targetKind } from '../ui/game/markup';
 import type { EnemyMark, TargetKind } from '../ui/game/markup';
 import type { PreviewShape } from '../ui/entity/model';
-import { DT, effectiveGroupStats } from '../sim';
+import { DT, effectiveGroupStats, objectiveRoute } from '../sim';
+import type { PathData } from '../sim';
 import type { Content, MissionConfig, SimState, Vec2, VisualConfig } from '../sim';
 import { cellToWorld, fitView, ISO_FORWARD, pickCell } from './coords';
 import type { IsoView } from './coords';
+import { buildConvoyCars, buildEnvironment, buildHeadquarters, setShadows } from './environmentScene';
+import { routePose } from './environment';
+import { CONVOY_GAP } from './props';
 import { dyingScale, effectProgress, EFFECT_COLORS, planEffects, recoilScale } from './effects';
 import type { EffectSpec, Vec3 } from './effects';
 import { buildModel } from './model';
@@ -59,14 +62,7 @@ export interface SceneOptions {
 
 const COLORS = {
   background: 0x10151c,
-  ground: 0x2b3a2f,
-  grid: 0x3c4f41,
-  path: 0x8a7a55,
-  spawn: 0xb5533c,
-  base: 0x3d9c6b,
   zoneSelected: 0xffd166,
-  airfield: 0x6b7480,
-  airfieldMark: 0xe8e8e8,
   hpBack: 0x1a1f26,
   hpFull: 0x4cd07d,
   hpLow: 0xe5484d,
@@ -97,17 +93,6 @@ function shapeGeometry(shape: PreviewShape): BufferGeometry {
   }
 }
 
-function gridLines(w: number, h: number): LineSegments {
-  const pos: number[] = [];
-  const x0 = -w / 2;
-  const z0 = -h / 2;
-  for (let i = 0; i <= w; i++) pos.push(x0 + i, 0.01, z0, x0 + i, 0.01, z0 + h);
-  for (let j = 0; j <= h; j++) pos.push(x0, 0.01, z0 + j, x0 + w, 0.01, z0 + j);
-  const geo = new BufferGeometry();
-  geo.setAttribute('position', new Float32BufferAttribute(pos, 3));
-  return new LineSegments(geo, new LineBasicMaterial({ color: COLORS.grid }));
-}
-
 export function createScene(
   container: HTMLElement,
   mission: MissionConfig,
@@ -119,13 +104,25 @@ export function createScene(
   const renderer = new WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setClearColor(COLORS.background);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = PCFShadowMap;
   renderer.domElement.style.display = 'block';
   container.appendChild(renderer.domElement);
 
   const scene = new Scene();
-  scene.add(new AmbientLight(0xffffff, 1.1));
-  const sun = new DirectionalLight(0xffffff, 1.0);
-  sun.position.set(-6, 14, 4);
+  scene.add(new AmbientLight(0xffffff, 0.95));
+  // Солнце слева-сзади относительно камеры: тени падают вправо-вниз по экрану. Теневая камера накрывает карту с запасом.
+  const sun = new DirectionalLight(0xfff4e0, 1.25);
+  sun.position.set(-14, 22, 10);
+  const shadowR = Math.hypot(size.w, size.h) / 2 + 4;
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = sun.shadow.camera.bottom = -shadowR;
+  sun.shadow.camera.right = sun.shadow.camera.top = shadowR;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 70;
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.03;
   scene.add(sun);
 
   // Камера: фиксированная ортографическая изометрия, параметры окна считаются в coords.ts.
@@ -139,48 +136,12 @@ export function createScene(
   const map = new Group();
   scene.add(map);
 
-  const ground = new Mesh(new BoxGeometry(size.w, 0.4, size.h), new MeshLambertMaterial({ color: COLORS.ground }));
-  ground.position.y = -0.2;
-  map.add(ground);
-  map.add(gridLines(size.w, size.h));
-
-  const pathMat = new MeshLambertMaterial({ color: COLORS.path });
-  const PATH_W = 0.8;
+  // Земля, дорога, аэродром, ворота входов, декор — раскладка из MissionConfig (см. environment.ts).
+  const env = buildEnvironment(mission);
+  map.add(env.group);
   const pathPoints = mission.path ?? [];
-  for (let i = 1; i < pathPoints.length; i++) {
-    const a = cellToWorld(pathPoints[i - 1]!, size);
-    const b = cellToWorld(pathPoints[i]!, size);
-    const len = Math.hypot(b.x - a.x, b.z - a.z);
-    const seg = new Mesh(new BoxGeometry(len + PATH_W, 0.04, PATH_W), pathMat);
-    seg.position.set((a.x + b.x) / 2, 0.02, (a.z + b.z) / 2);
-    seg.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
-    map.add(seg);
-  }
-
-  // Точки входа врагов: начало пути или spawns миссии с целью.
-  const spawnMat = new MeshLambertMaterial({ color: COLORS.spawn });
-  for (const cell of mission.objective ? (mission.spawns ?? []) : pathPoints.slice(0, 1)) {
-    const spawn = new Mesh(new BoxGeometry(0.9, 0.12, 0.9), spawnMat);
-    const sp = cellToWorld(cell, size);
-    spawn.position.set(sp.x, 0.06, sp.z);
-    map.add(spawn);
-  }
-  // База в конце пути — только в миссиях без цели; цель миссии рисуется из снапшота (ниже).
+  // Конец пути (миссии без цели) — для курса врагов и позиции базы; здание рисует buildEnvironment.
   const last = mission.objective ? undefined : pathPoints[pathPoints.length - 1];
-  if (last) {
-    const baseMesh = new Mesh(new BoxGeometry(0.9, 0.7, 0.9), new MeshLambertMaterial({ color: COLORS.base }));
-    const bp = cellToWorld(last, size);
-    baseMesh.position.set(bp.x, 0.35, bp.z);
-    map.add(baseMesh);
-  }
-
-  // Аэродром: площадка с полосой на клетке у края карты.
-  const ap = cellToWorld(mission.airfield, size);
-  const apron = new Mesh(new BoxGeometry(1.5, 0.06, 1.5), new MeshLambertMaterial({ color: COLORS.airfield }));
-  apron.position.set(ap.x, 0.03, ap.z);
-  const strip = new Mesh(new BoxGeometry(1.3, 0.02, 0.14), new MeshLambertMaterial({ color: COLORS.airfieldMark }));
-  strip.position.set(ap.x, 0.07, ap.z);
-  map.add(apron, strip);
 
   // --- динамика: сущности снапшота ---
   const geoCache = new Map<PreviewShape, BufferGeometry>();
@@ -190,6 +151,7 @@ export function createScene(
     if (v.model) {
       const model: Object3D = buildModel(v.model, v.color);
       model.scale.setScalar(v.size);
+      setShadows(model, true, false);
       return { mesh: model, lift: v.altitude, scale: v.size };
     }
     let geo = geoCache.get(v.shape);
@@ -197,6 +159,7 @@ export function createScene(
     let mat = matCache.get(v.color);
     if (!mat) matCache.set(v.color, (mat = new MeshLambertMaterial({ color: new Color(v.color) })));
     const m: Object3D = new Mesh(geo, mat);
+    m.castShadow = true;
     m.scale.setScalar(v.size);
     return { mesh: m, lift: v.altitude, scale: v.size };
   };
@@ -308,28 +271,47 @@ export function createScene(
 
   // Цель миссии (объект или колонна) с полосой прочности; позиция и прочность — из снапшота.
   const HP_W = 1.2;
+  // Здание (defend) стоит на месте цели; колонна (escort) — машины едут по маршруту, голова в позиции цели.
+  const route: PathData | undefined = mission.objective && objectiveRoute(mission.objective);
   const goal = mission.objective
     ? {
-        body: new Mesh(new BoxGeometry(0.8, 0.6, 0.8), new MeshLambertMaterial({ color: COLORS.base })),
+        body: route ? new Group() : buildHeadquarters(),
+        cars: route ? buildConvoyCars() : [],
+        /** Высота полосы прочности над землёй. */
+        barY: route ? 0.85 : 1.45,
         back: new Mesh(new BoxGeometry(HP_W + 0.08, 0.16, 0.06), new MeshBasicMaterial({ color: COLORS.hpBack })),
         fill: new Mesh(new BoxGeometry(HP_W, 0.1, 0.1), new MeshBasicMaterial({ color: COLORS.hpFull })),
         maxHp: mission.objective.hp,
         ratio: 1,
         x: undefined as Tween | undefined,
         y: undefined as Tween | undefined,
+        /** Пройденный путь колонны по маршруту. */
+        prog: undefined as Tween | undefined,
       }
     : undefined;
-  if (goal) scene.add(goal.body, goal.back, goal.fill);
+  if (goal) {
+    for (const car of goal.cars) goal.body.add(car);
+    scene.add(goal.body, goal.back, goal.fill);
+  }
   const goalWorld = (now: number): Vec3 | undefined =>
     goal?.x && goal.y ? cellToWorld({ x: tweenValue(goal.x, now), y: tweenValue(goal.y, now) }, size, 0.3) : undefined;
   const placeGoal = (now: number) => {
     const p = goalWorld(now);
     if (!goal || !p) return;
-    goal.body.position.set(p.x, p.y, p.z);
-    goal.back.position.set(p.x, p.y + 0.75, p.z);
+    if (route && goal.prog) {
+      const d = tweenValue(goal.prog, now);
+      goal.cars.forEach((car, i) => {
+        const pose = routePose(route, d - i * CONVOY_GAP);
+        const w = cellToWorld(pose.at, size, 0.05);
+        car.position.set(w.x, w.y, w.z);
+        car.rotation.y = pose.heading;
+      });
+    } else goal.body.position.set(p.x, 0.01, p.z);
+    const by = goal.barY;
+    goal.back.position.set(p.x, by, p.z);
     // Полоса убывает к левому краю: масштаб по X со сдвигом центра.
     goal.fill.scale.x = Math.max(goal.ratio, 1e-4);
-    goal.fill.position.set(p.x - (HP_W * (1 - goal.ratio)) / 2, p.y + 0.75, p.z);
+    goal.fill.position.set(p.x - (HP_W * (1 - goal.ratio)) / 2, by, p.z);
     (goal.fill.material as MeshBasicMaterial).color.set(goal.ratio > 0.35 ? COLORS.hpFull : COLORS.hpLow);
   };
   const clock = () => performance.now();
@@ -506,6 +488,7 @@ export function createScene(
       if (!goal.x || isNew) {
         goal.x = retarget(goal.x, o.pos.x, now, goal.x ? duration : 0);
         goal.y = retarget(goal.y, o.pos.y, now, goal.y ? duration : 0);
+        if (route) goal.prog = retarget(goal.prog, o.progress, now, goal.prog ? duration : 0);
       }
       goal.ratio = Math.max(0, Math.min(1, o.hp / goal.maxHp));
     }
@@ -653,6 +636,7 @@ export function createScene(
       }
     });
     for (const l of links.values()) l.mat.dispose();
+    env.dispose();
     labelLayer.remove();
     planeGeo.dispose();
     warnRingGeo.dispose();
