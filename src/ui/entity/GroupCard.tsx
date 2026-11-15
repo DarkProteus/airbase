@@ -20,7 +20,7 @@ const fmt = (n: number) => String(Math.round(n * 100) / 100);
 const ROWS: { label: string; key: Exclude<keyof GroupStats, 'weapons'>; optional?: boolean }[] = [
   { label: 'скорость', key: 'speed' },
   { label: 'топливо, с', key: 'fuel' },
-  { label: 'боекомплект', key: 'ammo' },
+  { label: 'боекомплект', key: 'ammo', optional: true },
   { label: 'перезарядка, с', key: 'rearmTime' },
   { label: 'радиус зоны', key: 'zoneRadius', optional: true },
   { label: 'бонус за вылет', key: 'income', optional: true },

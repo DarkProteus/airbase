@@ -109,7 +109,8 @@ describe('панель авиагрупп', () => {
   });
 
   test('время до конца перезарядки — только в фазе rearm и убывает до нуля', () => {
-    const sim = createSim(mission, CONTENT, 1, DEFAULT_LINEUP);
+    // Зоны у объекта: без команд игрока матч должен длиться дольше первого вылета.
+    const sim = createSim(mission, CONTENT, 1, DEFAULT_LINEUP.map((e) => ({ ...e, zone: { x: 5, y: 5 } })));
     const left: number[] = [];
     const g = sim.state.groups[0]!;
     for (let i = 0; !(g.sorties === 1 && g.phase === 'takeoff'); i++) {

@@ -39,7 +39,9 @@ export function GroupPanel({ rows, selected, onSelect }: Props) {
           <span className="group-stat group-rearm">{r.rearmSeconds !== null ? `заряжается ${sec(r.rearmSeconds)}` : ''}</span>
         </button>
       ))}
-      {selected !== null && <div className="group-hint">Клик по карте — зона патрулирования</div>}
+      <div className="group-hint" data-testid="group-hint">
+        {selected !== null ? 'Клик по карте — зона патрулирования' : 'Выберите группу, затем кликните по карте — её зона переедет туда'}
+      </div>
     </div>
   );
 }

@@ -22,7 +22,8 @@
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 12px;
 }
-.base-slot { opacity: 0.8; }
+.base-slot { opacity: 0.8; display: flex; }
+.base-slot > .card { flex: 1; }
 .base-slot[data-owned='true'] { opacity: 1; }
 .base-slot[data-lineup='true'] .card { border-color: #ffd166; }
 .base-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
