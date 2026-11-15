@@ -22,8 +22,8 @@ export function rejectionNotice(events: readonly SimEvent[]): string | undefined
   return last && REJECT_TEXT[last.reason];
 }
 
-const PHASE_TEXT = { prep: 'подготовка', wave: 'волна' } as const;
-const STATUS_TEXT = { running: '', won: 'победа', lost: 'поражение' } as const;
+export const PHASE_TEXT = { prep: 'подготовка', wave: 'волна' } as const;
+export const STATUS_TEXT = { running: '', won: 'победа', lost: 'поражение' } as const;
 
 /** Состояние цели миссии для HUD: прочность и прогресс к победе; undefined — у миссии нет цели. */
 export interface ObjectiveInfo {
@@ -52,7 +52,7 @@ export function objectiveInfo(mission: MissionConfig, s: SimState): ObjectiveInf
 }
 
 /** Подписи цели по типу: имя и остаток до победы. Новый тип цели — новая строка здесь. */
-const OBJECTIVE_TEXT: Record<ObjectiveConfig['type'], { name: string; left: (o: ObjectiveInfo) => string }> = {
+export const OBJECTIVE_TEXT: Record<ObjectiveConfig['type'], { name: string; left: (o: ObjectiveInfo) => string }> = {
   defend: { name: 'объект', left: (o) => `держаться ${Math.ceil(o.left)} с` },
   escort: { name: 'колонна', left: (o) => `путь ${Math.floor(o.progress * 100)}%` },
 };

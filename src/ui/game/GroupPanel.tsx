@@ -1,3 +1,4 @@
+import { RoleIcon } from '../entity/RoleIcon';
 import { TARGET_KIND_LABEL } from './markup';
 import type { TargetKind } from './markup';
 import type { GroupRow } from './selectors';
@@ -5,6 +6,8 @@ import type { GroupRow } from './selectors';
 interface Props {
   rows: readonly GroupRow[];
   selected: number | null;
+  /** Роль группы из её конфига (для значка) по id группы в матче. */
+  roles?: Readonly<Record<number, string | undefined>>;
   onSelect: (group: number | null) => void;
 }
 
@@ -21,7 +24,7 @@ export function KindChip({ kind }: { kind: TargetKind | undefined }) {
 }
 
 /** Панель авиагрупп: фаза вылета, топливо, боекомплект, время до конца перезарядки; клик выбирает группу, повторный — снимает. */
-export function GroupPanel({ rows, selected, onSelect }: Props) {
+export function GroupPanel({ rows, selected, roles = {}, onSelect }: Props) {
   if (rows.length === 0) return null;
   return (
     <div className="group-panel" data-testid="group-panel">
@@ -38,11 +41,14 @@ export function GroupPanel({ rows, selected, onSelect }: Props) {
           style={r.color ? { borderLeft: `4px solid ${r.color}` } : undefined}
           onClick={() => onSelect(selected === r.id ? null : r.id)}
         >
-          <span className="group-name">{r.name}</span>
+          <span className="group-name">
+            <RoleIcon role={roles[r.id]} />
+            {r.name}
+          </span>
           <span className="group-phase">{r.phaseLabel}</span>
           <span className="group-stat" title="Топливо">
             топл. {sec(r.fuel.seconds)}
-            <span className="group-bar">
+            <span className={`meter group-bar${r.fuel.ratio <= 0.25 ? ' meter-danger' : ''}`}>
               <span style={{ width: `${Math.round(r.fuel.ratio * 100)}%` }} />
             </span>
           </span>

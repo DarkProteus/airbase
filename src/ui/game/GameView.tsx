@@ -76,6 +76,7 @@ export function GameView({ mission, lineup, seed }: { mission: MissionConfig; li
         <GroupPanel
           rows={groupRows(world(mission, CONTENT, snapshot))}
           selected={selectedGroup}
+          roles={Object.fromEntries(snapshot.groups.map((g) => [g.id, CONTENT.groups[g.type]?.role]))}
           onSelect={(g) => store().selectGroup(g)}
         />
       )}

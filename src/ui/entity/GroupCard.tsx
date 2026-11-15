@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { AirGroupConfig, GroupStats } from '../../sim';
 import { EntityPreview } from './EntityPreview';
+import { RoleIcon } from './RoleIcon';
 import { formatModifier, viewGroup } from './model';
 import type { GroupView } from './model';
 import './entity.css';
@@ -39,6 +40,7 @@ export function GroupCard({ group, view = viewGroup(group), onClick, actions }: 
       <EntityPreview entity={{ role: group.role, tags: view.tags, visual: group.visual }} />
       <div className="card-body">
         <h3>
+          <RoleIcon role={group.role} />
           {group.name} <small>{group.role}</small>
         </h3>
         <div className="cost">

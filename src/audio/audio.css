@@ -1,14 +1,9 @@
 .sound-toggle {
   position: absolute;
-  top: 8px;
-  right: 12px;
+  top: var(--sp-2);
+  right: var(--sp-3);
   z-index: 10;
-  padding: 4px 10px;
-  font: 13px system-ui, sans-serif;
-  color: #dfe6ee;
-  background: #1b2230;
-  border: 1px solid #2c3750;
-  border-radius: 6px;
-  cursor: pointer;
+  padding: 6px var(--sp-3);
+  font-size: var(--fs);
 }
-.sound-toggle[aria-pressed='true'] { color: #7d8aa6; }
+.sound-toggle[aria-pressed='true'] { color: var(--text-faint); }

@@ -54,38 +54,44 @@ export function ResultScreen({
   return (
     <main className="result" data-testid="result-screen" data-outcome={result.status}>
       <h1 data-testid="result-title" data-won={v.won}>{v.title}</h1>
-      <section>
-        <h2>Статистика</h2>
-        <Rows rows={v.stats} testId="result-stats" />
-      </section>
-      <section>
-        <h2>Разбор по группам</h2>
-        <Table table={v.groups} testId="result-groups" />
-      </section>
-      <section>
-        <h2>Разбор по волнам</h2>
-        <Table table={v.waves} testId="result-waves" />
-        {v.weak.length > 0 && (
-          <ul className="result-weak" data-testid="result-weak">
-            {v.weak.map((w) => (
-              <li key={w.kind === 'wave' ? 'wave' : `g${w.group}`} data-kind={w.kind}>
-                {w.text}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <section>
-        <h2>Награда</h2>
-        <Rows rows={v.reward} testId="result-reward" />
-        <div className="result-total">
-          {v.total.label}: <strong data-testid="result-total">{v.total.value}</strong>
+      <div className="result-cols">
+        <div className="result-col">
+          <section className="panel">
+            <h2 className="panel-title">Статистика</h2>
+            <Rows rows={v.stats} testId="result-stats" />
+          </section>
+          <section className="panel">
+            <h2 className="panel-title">Разбор по группам</h2>
+            <Table table={v.groups} testId="result-groups" />
+          </section>
+        </div>
+        <div className="result-col">
+          <section className="panel">
+            <h2 className="panel-title">Разбор по волнам</h2>
+            <Table table={v.waves} testId="result-waves" />
+            {v.weak.length > 0 && (
+              <ul className="result-weak" data-testid="result-weak">
+                {v.weak.map((w) => (
+                  <li key={w.kind === 'wave' ? 'wave' : `g${w.group}`} data-kind={w.kind}>
+                    {w.text}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <section className="panel">
+            <h2 className="panel-title">Награда</h2>
+            <Rows rows={v.reward} testId="result-reward" />
+            <div className="result-total">
+              {v.total.label}: <strong data-testid="result-total">{v.total.value}</strong>
         </div>
         <div className="result-balance">
           {v.balance.label}: <strong data-testid="result-balance">{v.balance.value}</strong>
         </div>
       </section>
-      <button type="button" data-testid="to-base" onClick={onHome}>
+        </div>
+      </div>
+      <button type="button" className="btn btn-primary" data-testid="to-base" onClick={onHome}>
         На базу
       </button>
     </main>

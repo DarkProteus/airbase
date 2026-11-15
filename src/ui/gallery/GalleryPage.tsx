@@ -21,7 +21,7 @@ export function GalleryPage() {
       <h1>AIRBASE · галерея контента</h1>
 
       <section className="panel" aria-label="Параметры">
-        <h2>Песочница</h2>
+        <h2 className="panel-title">Песочница</h2>
         <div className="row">
           <strong>Теги (добавляются всем превью):</strong>
           {tags.map((t) => (
@@ -43,7 +43,7 @@ export function GalleryPage() {
             </label>
           ))}
         </div>
-        <button type="button" onClick={reset}>
+        <button type="button" className="btn" onClick={reset}>
           Сбросить
         </button>
       </section>

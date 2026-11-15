@@ -26,7 +26,7 @@ function Battle({ flow }: { flow: Extract<ReturnType<typeof useFlow>, { screen: 
       <GameView key={flow.seed} mission={flow.mission} lineup={flow.lineup} seed={flow.seed} />
       <Hud mission={flow.mission} />
       {!flow.profile.tutorialDone && <Tutorial key={`tutorial-${flow.seed}`} onFinish={tutorialDone} />}
-      <SoundToggle />
+      <SoundToggle mission={flow.mission} />
     </div>
   );
 }

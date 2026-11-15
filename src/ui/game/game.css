@@ -3,127 +3,125 @@
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: #10151c;
-  font-family: system-ui, sans-serif;
+  background: var(--bg);
+  font-family: var(--font);
 }
 .game-view {
   position: relative;
   flex: 1;
   min-height: 0;
 }
+
+/* Верхняя панель: ячейки «подпись / значение / пометка». Справа остаётся место под переключатель звука. */
 .hud {
   position: absolute;
-  top: 8px;
-  left: 12px;
-  color: #dfe6ee;
-  font-size: 14px;
+  top: var(--sp-2);
+  left: var(--sp-3);
+  max-width: calc(100% - 160px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--sp-1) var(--sp-4);
+  padding: 6px var(--sp-3);
   pointer-events: none;
 }
+.hud-cell { display: flex; flex-direction: column; justify-content: center; min-width: 64px; line-height: 1.2; }
+.hud-cell + .hud-cell { padding-left: var(--sp-4); border-left: 1px solid var(--line); }
+.hud-label { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); }
+.hud-value { font-size: var(--fs-lg); }
+.hud-value.is-accent { color: var(--accent); }
+.hud-value.is-bad { color: var(--danger); }
+.hud-note { font-size: var(--fs-sm); color: var(--text-dim); }
+.hud-cell .meter { margin-top: 3px; }
+.hud-mission .hud-value { white-space: nowrap; }
+.hud-status { align-self: center; padding: 3px 12px; border-radius: var(--radius); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.hud-status.is-won { background: var(--success-soft); color: var(--success); border: 1px solid var(--success); }
+.hud-status.is-lost { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line); }
+
 .notice {
   position: absolute;
-  top: 34px;
-  left: 12px;
-  padding: 4px 10px;
-  background: #5a2630;
-  border: 1px solid #a8485a;
-  border-radius: 6px;
-  color: #ffd9de;
-  font-size: 13px;
+  top: 66px;
+  left: var(--sp-3);
+  max-width: min(420px, calc(100% - 180px));
   pointer-events: none;
 }
+
+/* Панель групп: справа под переключателем звука; тесная версия — ниже. */
 .group-panel {
   position: absolute;
-  top: 48px; /* под переключателем звука */
-  right: 12px;
+  top: 48px;
+  right: var(--sp-3);
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 300px;
-  font-size: 13px;
+  gap: var(--sp-1);
+  width: 316px;
+  font-size: var(--fs);
 }
 .group-row {
   display: grid;
-  grid-template-columns: 70px 78px 1fr 62px;
-  gap: 2px 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px var(--sp-2);
   align-items: center;
-  padding: 5px 8px;
-  background: #151b26cc;
-  border: 1px solid #2c3750;
-  border-radius: 6px;
-  color: #dfe6ee;
+  padding: 5px var(--sp-2) 5px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
   text-align: left;
   cursor: pointer;
 }
-.group-row:hover { background: #1c2434; }
-.group-row[data-selected='true'] { border-color: #ffd166; }
-.group-name { font-weight: 600; }
-.group-phase { color: #9fb0c8; }
-.group-rearm { grid-column: 1 / -1; color: #ffd166; min-height: 1em; }
+.group-row:hover { background: var(--panel-hover); }
+.group-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.group-row[data-selected='true'] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.group-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 700; white-space: nowrap; }
+.group-phase { font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+.group-stat { font-size: var(--fs-sm); color: var(--text-dim); }
+.group-rearm { grid-column: 1 / -1; color: var(--accent); min-height: 1em; }
 .group-rearm:empty { display: none; }
-.group-bar { display: block; height: 4px; margin-top: 2px; background: #2c3750; border-radius: 2px; overflow: hidden; }
-.group-bar > span { display: block; height: 100%; background: #6fcf97; }
-.group-hint { padding: 3px 8px; color: #ffd166; font-size: 12px; text-align: right; }
-.group-targets { grid-column: 1 / -1; font-size: 12px; color: #9fb0c8; }
-.group-attack { color: #ffd166; }
-.kind { margin-right: 6px; white-space: nowrap; }
-.kind-air { color: #6ec1ff; }
-.kind-ground { color: #e0a458; }
+.group-bar { margin-top: 2px; }
+.group-hint { padding: 3px var(--sp-2); color: var(--accent); font-size: var(--fs-sm); text-align: right; text-shadow: 0 1px 3px rgb(0 0 0 / 0.9); }
+.group-targets { grid-column: 1 / -1; font-size: var(--fs-sm); color: var(--text-dim); }
+.group-attack { color: var(--accent); }
+
 .wave-warning {
   position: absolute;
-  left: 12px;
-  bottom: 12px;
-  max-width: 440px;
-  padding: 6px 10px;
-  background: #3a2418dd;
-  border: 1px solid #ff7a45;
-  border-radius: 6px;
-  color: #ffe2d2;
-  font-size: 13px;
+  left: var(--sp-3);
+  bottom: var(--sp-3);
+  max-width: min(440px, calc(100% - 360px));
   pointer-events: none;
 }
-.wave-warning-title { font-weight: 600; margin-bottom: 3px; }
-.wave-entry { display: flex; flex-wrap: wrap; gap: 2px 12px; }
-.wave-entry-name { color: #ff7a45; font-weight: 600; }
-.wave-hitby { margin-left: 4px; color: #9fd8a8; font-size: 12px; }
-.wave-nobody { color: #ff8a8a; }
+.wave-warning-title { font-weight: 700; margin-bottom: 3px; }
+.wave-entry { display: flex; flex-wrap: wrap; gap: 2px var(--sp-3); }
+.wave-entry-name { color: var(--alert); font-weight: 700; }
+.wave-hitby { margin-left: 4px; color: var(--success); font-size: var(--fs-sm); }
+.wave-nobody { color: var(--danger); }
+
+/* Подписи входов на карте (создаются сценой). */
 .scene-labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .scene-label {
   position: absolute;
   left: 0;
   top: 0;
   padding: 1px 6px;
-  background: #3a2418dd;
-  border: 1px solid #ff7a45;
+  background: var(--alert-soft);
+  border: 1px solid var(--alert);
   border-radius: 4px;
-  color: #ffe2d2;
-  font: 600 12px system-ui, sans-serif;
+  color: var(--alert-ink);
+  font: 700 12px var(--font);
   white-space: nowrap;
 }
+
+/* Обучение: слева под HUD и сообщением; не перекрывает панель групп справа и предупреждение о волне внизу. */
 .tutorial {
   position: absolute;
-  top: 72px; /* под HUD и сообщением; не перекрывает панель групп справа и предупреждение о волне внизу */
-  left: 12px;
+  top: 104px;
+  left: var(--sp-3);
   width: 320px;
-  padding: 8px 12px;
-  background: #14243acc;
-  border: 1px solid #6ec1ff;
-  border-radius: 6px;
-  color: #dfe6ee;
-  font-size: 13px;
+  max-width: calc(100% - 360px);
 }
-.tutorial-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
-.tutorial-title { font-weight: 600; color: #6ec1ff; }
-.tutorial-count { color: #9fb0c8; }
-.tutorial-text { margin: 0 0 8px; line-height: 1.35; }
+.tutorial-head { display: flex; justify-content: space-between; gap: var(--sp-2); margin-bottom: var(--sp-1); }
+.tutorial-title { font-weight: 700; color: var(--info); }
+.tutorial-count { color: var(--text-dim); }
+.tutorial-text { margin: 0 0 var(--sp-2); line-height: 1.4; }
 .tutorial-actions { display: flex; justify-content: space-between; }
-.tutorial-actions button {
-  padding: 3px 12px;
-  background: #1c2434;
-  border: 1px solid #2c3750;
-  border-radius: 4px;
-  color: #dfe6ee;
-  font: inherit;
-  cursor: pointer;
-}
-.tutorial-actions button:hover { border-color: #6ec1ff; }
-.tutorial-skip { color: #9fb0c8; }
+.tutorial-actions .btn { padding: 3px 12px; }

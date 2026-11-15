@@ -16,7 +16,7 @@ interface PanelProps {
 /** Плашка подсказки: заголовок и текст шага, номер, «Далее»/«Готово» и «Пропустить». Универсальна: всё берёт из данных шага. */
 export function TutorialPanel({ step, index, total, last, onNext, onSkip }: PanelProps) {
   return (
-    <div className="tutorial" data-testid="tutorial" data-step={step.id} role="dialog" aria-label="Обучение">
+    <div className="tutorial panel panel-info" data-testid="tutorial" data-step={step.id} role="dialog" aria-label="Обучение">
       <div className="tutorial-head">
         <span className="tutorial-title">{step.title}</span>
         <span className="tutorial-count" data-testid="tutorial-count">
@@ -25,10 +25,10 @@ export function TutorialPanel({ step, index, total, last, onNext, onSkip }: Pane
       </div>
       <p className="tutorial-text">{step.text}</p>
       <div className="tutorial-actions">
-        <button type="button" className="tutorial-skip" data-testid="tutorial-skip" onClick={onSkip}>
+        <button type="button" className="btn btn-ghost tutorial-skip" data-testid="tutorial-skip" onClick={onSkip}>
           Пропустить
         </button>
-        <button type="button" className="tutorial-next" data-testid="tutorial-next" onClick={onNext}>
+        <button type="button" className="btn tutorial-next" data-testid="tutorial-next" onClick={onNext}>
           {last ? 'Готово' : 'Далее'}
         </button>
       </div>

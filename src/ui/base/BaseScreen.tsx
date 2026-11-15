@@ -17,10 +17,22 @@ import type { ResetStep } from './model';
 import './base.css';
 
 /** Кнопка действия + причина отказа видимым текстом рядом. */
-function Action({ testId, label, reason, onClick }: { testId: string; label: string; reason?: ProfileRejection; onClick: () => void }) {
+function Action({
+  testId,
+  label,
+  reason,
+  onClick,
+  primary = false,
+}: {
+  testId: string;
+  label: string;
+  reason?: ProfileRejection;
+  onClick: () => void;
+  primary?: boolean;
+}) {
   return (
     <div className="base-action">
-      <button type="button" data-testid={testId} disabled={reason !== undefined} onClick={onClick}>
+      <button type="button" className={primary ? 'btn btn-primary' : 'btn'} data-testid={testId} disabled={reason !== undefined} onClick={onClick}>
         {label}
       </button>
       {reason && (
@@ -41,16 +53,16 @@ function ResetProgress({ onReset }: { onReset: () => void }) {
     if (next.reset) onReset();
   };
   return step === 'idle' ? (
-    <button type="button" data-testid="reset" onClick={() => act('ask')}>
+    <button type="button" className="btn btn-ghost btn-danger" data-testid="reset" onClick={() => act('ask')}>
       Сбросить прогресс
     </button>
   ) : (
     <div className="base-reset" data-testid="reset-confirm">
       <span>Весь прогресс будет потерян. Сбросить?</span>
-      <button type="button" data-testid="reset-yes" onClick={() => act('confirm')}>
+      <button type="button" className="btn btn-danger" data-testid="reset-yes" onClick={() => act('confirm')}>
         Да, сбросить
       </button>
-      <button type="button" data-testid="reset-no" onClick={() => act('cancel')}>
+      <button type="button" className="btn" data-testid="reset-no" onClick={() => act('cancel')}>
         Отмена
       </button>
     </div>
@@ -104,23 +116,28 @@ export function BaseScreen({
 
   return (
     <main className="base" data-testid="base-screen">
-      <header className="base-header">
-        <h1>AIRBASE · база</h1>
-        <div className="base-currency">
-          Валюта: <strong data-testid="currency">{profile.currency}</strong>
+      <header className="base-header panel">
+        <h1>
+          AIRBASE <span>· база</span>
+        </h1>
+        <div className="base-stat base-currency">
+          <span>Валюта</span>
+          <strong data-testid="currency">{profile.currency}</strong>
         </div>
-        <div className="base-lineup">
-          Состав: <strong data-testid="lineup-count">{profile.lineup.length}/{LINEUP_SIZE}</strong>
+        <div className="base-stat base-lineup">
+          <span>Состав</span>
+          <strong data-testid="lineup-count">{profile.lineup.length}/{LINEUP_SIZE}</strong>
         </div>
-        <Action testId="sortie" label="На вылет" reason={sortieReason} onClick={() => onSortie(missionId)} />
+        <Action testId="sortie" label="На вылет" primary reason={sortieReason} onClick={() => onSortie(missionId)} />
         <ResetProgress onReset={onReset} />
       </header>
+      <h2 className="base-section">Миссии</h2>
       <section className="base-missions" data-testid="missions">
         {Object.values(MISSIONS).map((m) => (
           <button
             key={m.id}
             type="button"
-            className="base-mission"
+            className="base-mission panel"
             data-testid="mission"
             data-mission={m.id}
             data-selected={m.id === missionId}
@@ -132,6 +149,7 @@ export function BaseScreen({
           </button>
         ))}
       </section>
+      <h2 className="base-section">Авиагруппы</h2>
       <section className="base-grid">
         {Object.values(GROUPS).map((group) => {
           const level = profile.levels[group.id] ?? 0;
