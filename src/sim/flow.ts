@@ -24,7 +24,9 @@ export type FlowEvent =
   /** Бой → итог: конечное состояние матча. Пока матч идёт, переход невозможен. */
   | { type: 'finish'; final: SimState }
   /** Итог → база. */
-  | { type: 'home' };
+  | { type: 'home' }
+  /** Обучение пройдено или пропущено: в любом экране ставит флаг в профиле (награда и покупки его сохраняют). */
+  | { type: 'tutorialDone' };
 
 export const initialFlow = (profile: Profile): Flow => ({ screen: 'base', profile });
 
@@ -50,5 +52,7 @@ export function flowStep(flow: Flow, event: FlowEvent): Flow {
     }
     case 'home':
       return flow.screen === 'result' ? { screen: 'base', profile: flow.profile } : flow;
+    case 'tutorialDone':
+      return flow.profile.tutorialDone ? flow : { ...flow, profile: { ...flow.profile, tutorialDone: true } };
   }
 }

@@ -99,3 +99,26 @@ describe('устаревшее по контенту: прогресс сохр�
     expect(parse(raw)).not.toBe(START_PROFILE);
   });
 });
+
+describe('флаг обучения (tutorialDone)', () => {
+  test('сохранение старого формата (без флага) читается целиком, обучение не пройдено', () => {
+    const old = '{"version":1,"profile":{"currency":1234,"levels":{"f16":2,"a10":0,"c130":1},"lineup":["c130","f16","a10"]}}';
+    const p = parse(old)!;
+    expect(p).toEqual(RICH);
+    expect(p.tutorialDone).toBeUndefined();
+  });
+
+  test('флаг пишется и читается; версия формата прежняя', () => {
+    const done: Profile = { ...RICH, tutorialDone: true };
+    expect(parse(serializeProfile(done))).toEqual(done);
+    expect(JSON.parse(serializeProfile(done)).version).toBe(1);
+  });
+
+  test('мусор вместо флага не отбрасывает прогресс: обучение считается не пройденным', () => {
+    for (const bad of ['yes', 1, null, [], {}, false]) {
+      const p = parse(save({ ...RICH, tutorialDone: bad }))!;
+      expect(p, JSON.stringify(bad)).toEqual(RICH);
+      expect('tutorialDone' in p).toBe(false);
+    }
+  });
+});

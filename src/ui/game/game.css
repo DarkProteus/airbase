@@ -99,3 +99,31 @@
   font: 600 12px system-ui, sans-serif;
   white-space: nowrap;
 }
+.tutorial {
+  position: absolute;
+  top: 72px; /* под HUD и сообщением; не перекрывает панель групп справа и предупреждение о волне внизу */
+  left: 12px;
+  width: 320px;
+  padding: 8px 12px;
+  background: #14243acc;
+  border: 1px solid #6ec1ff;
+  border-radius: 6px;
+  color: #dfe6ee;
+  font-size: 13px;
+}
+.tutorial-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.tutorial-title { font-weight: 600; color: #6ec1ff; }
+.tutorial-count { color: #9fb0c8; }
+.tutorial-text { margin: 0 0 8px; line-height: 1.35; }
+.tutorial-actions { display: flex; justify-content: space-between; }
+.tutorial-actions button {
+  padding: 3px 12px;
+  background: #1c2434;
+  border: 1px solid #2c3750;
+  border-radius: 4px;
+  color: #dfe6ee;
+  font: inherit;
+  cursor: pointer;
+}
+.tutorial-actions button:hover { border-color: #6ec1ff; }
+.tutorial-skip { color: #9fb0c8; }

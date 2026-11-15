@@ -14,7 +14,8 @@ const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isI
  * Чтение сохранения. Любой мусор, чужая форма или неизвестная версия -> undefined (вызывающий берёт стартовый профиль).
  * Устаревшее по контенту (группы, которых уже нет в реестре) не отбрасывает весь прогресс: такие записи
  * выкидываются из уровней и состава, уровень выше максимума срезается, состав чистится от непокупных групп,
- * дублей и лишних слотов сверх `lineupSize`.
+ * дублей и лишних слотов сверх `lineupSize`. Поля, добавленные позже (`tutorialDone`), в старом сохранении
+ * отсутствуют — версия формата не меняется, профиль читается как есть (обучение ещё не пройдено).
  */
 export function parseProfile(raw: string | null | undefined, groups: GroupRegistry, lineupSize: number): Profile | undefined {
   if (typeof raw !== 'string') return undefined;
@@ -36,5 +37,7 @@ export function parseProfile(raw: string | null | undefined, groups: GroupRegist
     if (known(id)) kept[id] = Math.min(level, maxLevel(groups[id]!));
   }
   const slots = (lineup as string[]).filter((id, i, all) => Object.hasOwn(kept, id) && all.indexOf(id) === i).slice(0, lineupSize);
-  return { currency, levels: kept, lineup: slots };
+  // Флаг обучения необязателен: старые сохранения его не знают, любое значение кроме true — «не пройдено».
+  const tutorialDone = data.profile.tutorialDone === true;
+  return { currency, levels: kept, lineup: slots, ...(tutorialDone ? { tutorialDone } : {}) };
 }

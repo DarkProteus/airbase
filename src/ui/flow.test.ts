@@ -86,3 +86,14 @@ test('сброс прогресса: стартовый профиль в пот
   b.resetProgress(); // повторный сброс на свежем старте тоже пишет стартовый профиль
   expect(saved(b.mem)).toEqual(START_PROFILE);
 });
+
+test('обучение: флаг сохраняется в хранилище, читается после перезапуска и переживает сброс прогресса', async () => {
+  const a = await boot();
+  a.send({ type: 'tutorialDone' });
+  expect(saved(a.mem).tutorialDone).toBe(true);
+
+  const b = await boot(a.mem.get(SAVE_KEY));
+  expect(b.initialProfile().tutorialDone).toBe(true);
+  b.resetProgress();
+  expect(saved(b.mem)).toEqual({ ...START_PROFILE, tutorialDone: true });
+});

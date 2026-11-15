@@ -119,3 +119,22 @@ describe('награда начисляется в профиль ровно о�
     expect(expected.income).toBeGreaterThan(0);
   });
 });
+
+describe('обучение пройдено (tutorialDone)', () => {
+  test('в бою ставит флаг в профиль; повтор — тот же объект', () => {
+    const battle = toBattle();
+    const done = flowStep(battle, { type: 'tutorialDone' });
+    expect(done.screen).toBe('battle');
+    expect(done.profile).toEqual({ ...FULL, tutorialDone: true });
+    expect(flowStep(done, { type: 'tutorialDone' })).toBe(done);
+  });
+
+  test('флаг переживает награду, возврат на базу и покупки', () => {
+    const battle = flowStep(toBattle(), { type: 'tutorialDone' }) as Extract<Flow, { screen: 'battle' }>;
+    const result = flowStep(battle, { type: 'finish', final: finished(battle) });
+    expect(result.profile.tutorialDone).toBe(true);
+    const base = flowStep(result, { type: 'home' });
+    expect(base.profile.tutorialDone).toBe(true);
+    expect(flowStep(base, { type: 'profile', profile: { ...base.profile, currency: 1 } }).profile.tutorialDone).toBe(true);
+  });
+});

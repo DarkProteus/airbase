@@ -29,7 +29,11 @@ export function sortie(missionId: string): void {
   if (mission) send({ type: 'sortie', mission, lineupSize: LINEUP_SIZE, zones: DEFAULT_ZONES, seed: newSeed() });
 }
 
-/** Сброс прогресса: стартовый профиль (свежая копия — запись в хранилище идёт по смене ссылки) через обычное событие `profile`. */
+/** Сброс прогресса: стартовый профиль (свежая копия — запись в хранилище идёт по смене ссылки) через обычное событие `profile`. Пройденное обучение не возвращается. */
 export function resetProgress(): void {
-  send({ type: 'profile', profile: { ...START_PROFILE, levels: { ...START_PROFILE.levels }, lineup: [...START_PROFILE.lineup] } });
+  const tutorialDone = (useFlowStore.getState().flow ?? INITIAL).profile.tutorialDone;
+  send({
+    type: 'profile',
+    profile: { ...START_PROFILE, levels: { ...START_PROFILE.levels }, lineup: [...START_PROFILE.lineup], ...(tutorialDone ? { tutorialDone } : {}) },
+  });
 }
