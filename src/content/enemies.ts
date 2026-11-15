@@ -1,4 +1,5 @@
 import type { EnemyConfig } from '../sim';
+import { MODELS } from './models';
 
 const drone: EnemyConfig = {
   id: 'drone',
@@ -9,7 +10,7 @@ const drone: EnemyConfig = {
   reward: 10,
   leakDamage: 1,
   tags: ['air', 'light'],
-  visual: { shape: 'sphere', color: '#ee5a4a', scale: 0.6 },
+  visual: { shape: 'sphere', model: MODELS.drone, color: '#ee5a4a', scale: 0.7 },
 };
 
 const runner: EnemyConfig = {
@@ -21,7 +22,7 @@ const runner: EnemyConfig = {
   reward: 6,
   leakDamage: 1,
   tags: ['air', 'light', 'fast'],
-  visual: { shape: 'pyramid', color: '#f5a524', scale: 0.55 },
+  visual: { shape: 'pyramid', model: MODELS.runner, color: '#f5a524', scale: 0.7 },
 };
 
 const tank: EnemyConfig = {
@@ -32,7 +33,7 @@ const tank: EnemyConfig = {
   reward: 30,
   leakDamage: 3,
   tags: ['ground', 'armored'],
-  visual: { shape: 'cube', color: '#9a7b52', scale: 0.9 },
+  visual: { shape: 'cube', model: MODELS.tank, color: '#9a7b52', scale: 0.9 },
 };
 
 const bomber: EnemyConfig = {
@@ -43,7 +44,7 @@ const bomber: EnemyConfig = {
   reward: 150,
   leakDamage: 10,
   tags: ['air', 'heavy', 'boss'],
-  visual: { shape: 'cylinder', color: '#d1366b', scale: 1.7, altitude: 1.2 },
+  visual: { shape: 'cylinder', model: MODELS.bomber, color: '#d1366b', scale: 1.3, altitude: 1.2 },
 };
 
 export const ENEMIES: Record<string, EnemyConfig> = {

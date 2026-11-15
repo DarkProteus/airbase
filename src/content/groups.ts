@@ -20,7 +20,7 @@ const f16: AirGroupConfig = {
     { cost: 80, modifiers: [{ stat: 'damage', op: 'mul', value: 1.3, scope: 'self' }] },
     { cost: 140, modifiers: [{ stat: 'ammo', op: 'add', value: 16, scope: 'self' }] },
   ],
-  visual: { shape: 'pyramid', model: MODELS.jet, color: '#4f9de8', scale: 1.1 },
+  visual: { shape: 'pyramid', model: MODELS.f16, color: '#4f9de8', scale: 1.1 },
 };
 
 /** Штурмовик: медленнее, бьёт только наземные цели тяжёлыми выстрелами. */
@@ -42,7 +42,7 @@ const a10: AirGroupConfig = {
     { cost: 90, modifiers: [{ stat: 'damage', op: 'mul', value: 1.3, scope: 'self' }] },
     { cost: 150, modifiers: [{ stat: 'ammo', op: 'add', value: 10, scope: 'self' }] },
   ],
-  visual: { shape: 'cube', color: '#8fbf5a', scale: 1.1 },
+  visual: { shape: 'cube', model: MODELS.a10, color: '#8fbf5a', scale: 1.1 },
 };
 
 /** РЭБ: не стреляет; пока патрулирует, в его зоне враги медленнее, а ударные (strike) группы бьют сильнее. */
@@ -64,7 +64,7 @@ const growler: AirGroupConfig = {
     { stat: 'damage', op: 'mul', value: 1.3, scope: 'aura', tags: ['strike'] },
   ],
   upgrades: [{ cost: 120, modifiers: [{ stat: 'range', op: 'add', value: 0.5, scope: 'self' }] }],
-  visual: { shape: 'cylinder', color: '#a56fe0', scale: 1 },
+  visual: { shape: 'cylinder', model: MODELS.growler, color: '#a56fe0', scale: 1 },
 };
 
 /** Экономика: не воюет; каждый завершённый вылет добавляет бонус к награде миссии. */
@@ -84,7 +84,7 @@ const c130: AirGroupConfig = {
   weapons: [],
   auras: [],
   upgrades: [{ cost: 100, modifiers: [{ stat: 'income', op: 'add', value: 20, scope: 'self' }] }],
-  visual: { shape: 'cube', color: '#d9c25c', scale: 1.2 },
+  visual: { shape: 'cube', model: MODELS.c130, color: '#d9c25c', scale: 1.2 },
 };
 
 export const GROUPS: Record<string, AirGroupConfig> = {
