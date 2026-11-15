@@ -60,7 +60,7 @@ describe('полоски здоровья врагов', () => {
 
   test('при выбранной группе помечено, каких врагов она может бить', () => {
     const state = snapshot(sim);
-    state.enemies.push({ id: 999, type: 'tank', hp: 210, speed: 1, dist: 0, pos: { x: 1, y: 1 } });
+    state.enemies.push({ id: 999, type: 'tank', wave: 0, hp: 210, speed: 1, dist: 0, pos: { x: 1, y: 1 } });
     const f16 = state.groups[0]!.id;
     const marks = enemyMarks(CONTENT, state, f16);
     expect(marks.find((m) => m.id === 999)).toMatchObject({ kind: 'ground', hittable: false });

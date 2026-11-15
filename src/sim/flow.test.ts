@@ -97,6 +97,7 @@ describe('награда начисляется в профиль ровно о�
   test('при переходе в итог валюта растёт на награду, показанную на экране', () => {
     const result = flowStep(battle, { type: 'finish', final }) as Extract<Flow, { screen: 'result' }>;
     expect(result.reward).toEqual(expected);
+    expect(result.result.stats).toEqual(final.stats);
     expect(result.reward.total).toBeGreaterThan(0);
     expect(result.profile.currency).toBe(FULL.currency + expected.total);
   });

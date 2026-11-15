@@ -32,3 +32,12 @@
   cursor: pointer;
 }
 .result button:hover { background: #384568; }
+.result-table { width: 100%; border-collapse: collapse; }
+.result-table th { padding: 3px 8px; text-align: right; font-size: 12px; font-weight: 500; color: #9aa7ba; border-bottom: 1px solid #243040; }
+.result-table td { padding: 3px 8px; text-align: right; font-weight: 600; border-bottom: 1px solid #243040; }
+.result-table th:first-child, .result-table td:first-child { text-align: left; }
+.result-table tr[data-mark='weak'] td { color: #ff9aa5; background: #2a1a20; }
+.result-table tr[data-mark='idle'] td { color: #ffd166; background: #2a2616; }
+.result-weak { margin: 8px 0 0; padding-left: 18px; font-size: 14px; }
+.result-weak li[data-kind='wave'] { color: #ff9aa5; }
+.result-weak li[data-kind='idle'] { color: #ffd166; }

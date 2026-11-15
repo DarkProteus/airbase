@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { SoundToggle } from '../audio';
+import { GROUPS } from '../content';
 import { useGameStore } from '../store/game';
 import { BaseScreen } from './base/BaseScreen';
 import { resetProgress, send, sortie, useFlow } from './flow';
@@ -32,6 +33,6 @@ export function App() {
     case 'battle':
       return <Battle flow={flow} />;
     case 'result':
-      return <ResultScreen mission={flow.mission} result={flow.result} reward={flow.reward} currency={flow.profile.currency} onHome={() => send({ type: 'home' })} />;
+      return <ResultScreen mission={flow.mission} result={flow.result} reward={flow.reward} currency={flow.profile.currency} groups={GROUPS} onHome={() => send({ type: 'home' })} />;
   }
 }

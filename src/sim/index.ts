@@ -9,5 +9,6 @@ export * from './rng';
 export * from './save';
 export * from './sortie';
 export * from './stats';
+export * from './tally';
 export * from './types';
 export * from './bot';

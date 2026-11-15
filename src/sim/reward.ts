@@ -1,5 +1,6 @@
 import type { SimState } from './engine';
 import type { Profile } from './profile';
+import type { MatchStats } from './tally';
 import type { MissionConfig } from './types';
 
 /** Итог завершённого матча: из него считается награда и строится экран итога. */
@@ -15,6 +16,8 @@ export interface MissionResult {
   /** Остаток прочности цели миссии (без цели — жизни базы), не ниже 0. */
   hp: number;
   ticks: number;
+  /** Разбор боя по группам и волнам. */
+  stats: MatchStats;
 }
 
 /** Итог из состояния матча; undefined, пока матч идёт. */
@@ -28,6 +31,7 @@ export function missionResult(state: SimState): MissionResult | undefined {
     income: state.income,
     hp: Math.max(0, state.objective?.hp ?? state.lives),
     ticks: state.tick,
+    stats: state.stats,
   };
 }
 

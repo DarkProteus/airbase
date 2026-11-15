@@ -22,6 +22,7 @@ const result = (patch: Partial<MissionResult> = {}): MissionResult => ({
   income: 60,
   hp: 10,
   ticks: 100,
+  stats: { groups: [], waves: [] },
   ...patch,
 });
 
@@ -38,6 +39,7 @@ describe('missionResult', () => {
     expect(r.kills).toBe(final.kills);
     expect(r.killMoney + r.income).toBe(final.money);
     expect(r.sorties).toBe(final.groups.reduce((n, g) => n + g.sorties, 0));
+    expect(r.stats).toEqual(final.stats);
   });
 
   test('бонус группы с income входит в итог, без неё — нулевой', () => {

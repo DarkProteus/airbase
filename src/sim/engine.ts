@@ -3,6 +3,7 @@ import { createObjective, objectiveOutcome, objectiveRoute, stepObjective, type 
 import { buildPath, pointAt, type PathData } from './path';
 import { rngNext } from './rng';
 import { auraSources, createGroup, enemySpeed, stepGroups, zoneRejection, type GroupState, type LineupEntry } from './sortie';
+import { createStats, type MatchStats } from './tally';
 import type { Content, MissionConfig, Vec2 } from './types';
 
 export const TICK_RATE = 30;
@@ -11,6 +12,8 @@ export const DT = 1 / TICK_RATE;
 export interface EnemyState {
   id: number;
   type: string;
+  /** Индекс волны миссии, из которой враг заспавнен. */
+  wave: number;
   hp: number;
   speed: number;
   /** Пройденная дистанция: по пути или, в миссии с целью, по прямой к цели. */
@@ -66,6 +69,8 @@ export interface SimState {
   groups: GroupState[];
   /** Цель миссии; нет — миссия с путём и жизнями базы. */
   objective?: ObjectiveState;
+  /** Статистика матча по группам и волнам. */
+  stats: MatchStats;
   /** События последнего тика. */
   events: SimEvent[];
 }
@@ -121,6 +126,7 @@ export function createSim(mission: MissionConfig, content: Content, seed: number
       enemies: [],
       groups,
       ...(objective ? { objective: createObjective(objective) } : {}),
+      stats: createStats(groups, mission.waves.length),
       events: [],
     },
   };
@@ -145,14 +151,21 @@ function applyCommand(sim: Sim, cmd: Command): void {
   }
 }
 
-/** Наносит урон врагу; при гибели начисляет награду. Возвращает true, если враг убит. */
-export function damageEnemy(sim: Sim, enemyId: number, amount: number): boolean {
+/**
+ * Наносит урон врагу; при гибели начисляет награду. Возвращает true, если враг убит.
+ * `by` — id группы-стрелка: ей в статистику идёт фактический урон (не больше остатка здоровья) и убийство.
+ */
+export function damageEnemy(sim: Sim, enemyId: number, amount: number, by?: number): boolean {
   const s = sim.state;
   const i = s.enemies.findIndex((e) => e.id === enemyId);
   const e = s.enemies[i];
   if (!e) return false;
+  const shooter = by === undefined ? undefined : s.stats.groups.find((g) => g.id === by);
+  if (shooter) shooter.damage += Math.max(0, Math.min(amount, e.hp));
   e.hp -= amount;
   if (e.hp > 0) return false;
+  if (shooter) shooter.kills++;
+  s.stats.waves[e.wave]!.killed++;
   const reward = sim.content.enemies[e.type]!.reward;
   s.enemies.splice(i, 1);
   s.money += reward;
@@ -205,7 +218,8 @@ export function step(sim: Sim, commands: readonly Command[] = []): void {
     const cfg = sim.content.enemies[sp.enemy]!;
     const jitter = cfg.speedVar ? 1 + (rngNext(s) * 2 - 1) * cfg.speedVar : 1;
     const id = s.nextId++;
-    s.enemies.push({ id, type: cfg.id, hp: cfg.hp, speed: cfg.speed * jitter, dist: 0, pos: { ...sp.at } });
+    s.stats.waves[s.wave - 1]!.spawned++;
+    s.enemies.push({ id, type: cfg.id, wave: s.wave - 1, hp: cfg.hp, speed: cfg.speed * jitter, dist: 0, pos: { ...sp.at } });
     s.events.push({ type: 'spawn', enemy: id });
   }
 
@@ -233,6 +247,9 @@ export function step(sim: Sim, commands: readonly Command[] = []): void {
     const damage = sim.content.enemies[e.type]!.leakDamage;
     if (goal) goal.hp -= damage;
     else s.lives -= damage;
+    const tally = s.stats.waves[e.wave]!;
+    tally.leaked++;
+    tally.damage += damage;
     s.events.push({ type: 'leak', enemy: e.id, damage });
     return false;
   });

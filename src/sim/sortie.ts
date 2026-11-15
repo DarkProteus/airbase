@@ -225,7 +225,7 @@ function fire(sim: Sim, g: GroupState, st: GroupStats): void {
     g.lastShot = { enemy: target.id, tick: s.tick };
     g.cooldowns[i] = Math.max(1, Math.round(TICK_RATE / weapon.fireRate));
     s.events.push({ type: 'groupShot', group: g.id, enemy: target.id, damage: weapon.damage });
-    damageEnemy(sim, target.id, weapon.damage);
+    damageEnemy(sim, target.id, weapon.damage, g.id);
   });
 }
 
@@ -247,6 +247,8 @@ export function stepGroups(sim: Sim): void {
     const burn = st.fuel > 0 ? own.fuel / st.fuel : 1;
     g.cooldowns = g.cooldowns.map((c) => Math.max(0, c - 1));
     g.phaseTick++;
+    const tally = sim.state.stats.groups.find((t) => t.id === g.id);
+    if (tally && g.phase === 'patrol') tally.patrolTicks++;
     const bingo = () => g.fuel <= flightTicks(g.pos, home, st.speed);
     switch (g.phase) {
       case 'takeoff':
@@ -268,6 +270,7 @@ export function stepGroups(sim: Sim): void {
         g.fuel = Math.max(0, g.fuel - burn);
         if (moveTo(g.pos, home, stepLen)) {
           g.sorties++;
+          if (tally) tally.sorties++;
           sim.state.events.push({ type: 'sortieDone', group: g.id, sortie: g.sorties });
           if (st.income > 0) {
             sim.state.money += st.income;
