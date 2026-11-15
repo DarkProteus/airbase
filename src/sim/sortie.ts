@@ -30,6 +30,8 @@ export interface GroupState {
   cooldowns: number[];
   /** Сколько вылетов завершено. */
   sorties: number;
+  /** Последний выстрел группы: по кому и в какой тик (для показа «кто кого атакует»). */
+  lastShot?: { enemy: number; tick: number };
 }
 
 /** Эффективные параметры группы после модификаторов; времена в секундах. */
@@ -43,6 +45,10 @@ export interface GroupStats {
   income: number;
   weapons: WeaponConfig[];
 }
+
+/** Может ли оружие бить цель с такими тегами; пустой список целевых тегов — любые цели. */
+export const weaponHits = (weapon: Pick<WeaponConfig, 'targetTags'>, enemyTags: readonly string[]): boolean =>
+  weapon.targetTags.length === 0 || weapon.targetTags.some((t) => enemyTags.includes(t));
 
 const EPS = 1e-9;
 /** Секунды -> целые тики (округление к ближайшему). */
@@ -211,12 +217,12 @@ function fire(sim: Sim, g: GroupState, st: GroupStats): void {
     if (g.ammo <= 0 || g.cooldowns[i]! > 0 || weapon.damage <= 0 || weapon.fireRate <= 0) return;
     let target: EnemyState | undefined;
     for (const e of s.enemies) {
-      const tags = sim.content.enemies[e.type]!.tags;
-      if (weapon.targetTags.length && !weapon.targetTags.some((t) => tags.includes(t))) continue;
+      if (!weaponHits(weapon, sim.content.enemies[e.type]!.tags)) continue;
       if (dist(e.pos, g.zone) <= st.zoneRadius && (!target || enemyThreat(sim, e) > enemyThreat(sim, target))) target = e;
     }
     if (!target) return;
     g.ammo--;
+    g.lastShot = { enemy: target.id, tick: s.tick };
     g.cooldowns[i] = Math.max(1, Math.round(TICK_RATE / weapon.fireRate));
     s.events.push({ type: 'groupShot', group: g.id, enemy: target.id, damage: weapon.damage });
     damageEnemy(sim, target.id, weapon.damage);

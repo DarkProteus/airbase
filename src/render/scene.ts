@@ -15,6 +15,7 @@ import {
   MeshBasicMaterial,
   MeshLambertMaterial,
   OrthographicCamera,
+  PlaneGeometry,
   RingGeometry,
   Scene,
   SphereGeometry,
@@ -23,12 +24,14 @@ import {
 } from 'three';
 import type { Material } from 'three';
 import { visualOf } from '../ui/entity/model';
+import { attackLinks, enemyMarks, targetKind } from '../ui/game/markup';
+import type { EnemyMark, TargetKind } from '../ui/game/markup';
 import type { PreviewShape } from '../ui/entity/model';
 import { DT, effectiveGroupStats } from '../sim';
 import type { Content, MissionConfig, SimState, Vec2, VisualConfig } from '../sim';
 import { cellToWorld, fitView, ISO_FORWARD, pickCell } from './coords';
 import type { IsoView } from './coords';
-import { dyingScale, effectProgress, planEffects, recoilScale } from './effects';
+import { dyingScale, effectProgress, EFFECT_COLORS, planEffects, recoilScale } from './effects';
 import type { EffectSpec, Vec3 } from './effects';
 import { retarget, tweenDuration, tweenValue } from './motion';
 import type { Tween } from './motion';
@@ -43,6 +46,8 @@ export interface SceneHandle {
   update(state: SimState): void;
   /** Выделить зону группы (GroupState.id); null — снять выделение. */
   setSelectedGroup(group: number | null): void;
+  /** Подсветить точки входа ближайшей волны (с подписью); пустой список — убрать. */
+  setWarning(points: readonly { at: Vec2; label: string }[]): void;
   dispose(): void;
 }
 
@@ -64,7 +69,15 @@ const COLORS = {
   hpBack: 0x1a1f26,
   hpFull: 0x4cd07d,
   hpLow: 0xe5484d,
+  kindAir: 0x6ec1ff,
+  kindGround: 0xe0a458,
+  warning: 0xff7a45,
 };
+
+/** Цвет метки типа цели; тип задают теги конфига (см. TARGET_KINDS). */
+const KIND_COLORS: Record<TargetKind, number> = { air: COLORS.kindAir, ground: COLORS.kindGround };
+const BAR_W = 0.85;
+const BAR_H = 0.12;
 
 const CAMERA_DISTANCE = 40;
 
@@ -186,6 +199,14 @@ export function createScene(
     scale: number;
     x: Tween;
     y: Tween;
+    /** Полоска здоровья + метка типа цели (плашка к камере). */
+    bar: Bar;
+  }
+  interface Bar {
+    root: Group;
+    fill: Mesh;
+    mats: MeshBasicMaterial[];
+    fillMat: MeshBasicMaterial;
   }
   interface Dying {
     mesh: Mesh;
@@ -209,6 +230,7 @@ export function createScene(
     zoneColor: Color;
   }
   const groups = new Map<number, GroupEntry>();
+  const groupColors = new Map<number, number>();
   let selectedGroup: number | null = null;
   const enemies = new Map<number, EnemyEntry>();
   const dying: Dying[] = [];
@@ -216,6 +238,60 @@ export function createScene(
   const dynamic = new Group();
   scene.add(dynamic);
   const baseWorld = last ? cellToWorld(last, size, 0.4) : undefined;
+
+  // Полоска здоровья врага: плашки смотрят в камеру, поэтому полоса всегда горизонтальна на экране.
+  const planeGeo = new PlaneGeometry(1, 1);
+  const makeBar = (kind: TargetKind | undefined): Bar => {
+    const root = new Group();
+    root.quaternion.copy(camera.quaternion);
+    const mat = (color: number) => new MeshBasicMaterial({ color, transparent: true, depthTest: false });
+    const backMat = mat(COLORS.hpBack);
+    const fillMat = mat(COLORS.hpFull);
+    const mats = [backMat, fillMat];
+    const part = (m: MeshBasicMaterial, w: number, h: number, z: number) => {
+      const mesh = new Mesh(planeGeo, m);
+      mesh.scale.set(w, h, 1);
+      mesh.position.z = z;
+      mesh.renderOrder = 5 + z * 1000;
+      root.add(mesh);
+      return mesh;
+    };
+    part(backMat, BAR_W + 0.06, BAR_H + 0.05, 0);
+    const fill = part(fillMat, BAR_W, BAR_H, 0.001);
+    if (kind) {
+      // Воздух — ромб, земля — квадрат; цвет тоже по типу.
+      const markMat = mat(KIND_COLORS[kind]);
+      mats.push(markMat);
+      const mark = part(markMat, 0.2, 0.2, 0.002);
+      mark.position.x = -(BAR_W / 2 + 0.16);
+      if (kind === 'air') mark.rotation.z = Math.PI / 4;
+    }
+    return { root, fill, mats, fillMat };
+  };
+  const paintBar = (b: Bar, m: EnemyMark) => {
+    b.fill.scale.x = Math.max(m.ratio, 1e-3) * BAR_W;
+    b.fill.position.x = -(BAR_W * (1 - m.ratio)) / 2;
+    b.fillMat.color.set(m.ratio > 0.35 ? COLORS.hpFull : COLORS.hpLow);
+    // Выбрана группа — враги, которых она не может бить, тускнеют.
+    for (const x of b.mats) x.opacity = m.hittable === false ? 0.3 : 1;
+  };
+  const removeBar = (b: Bar) => {
+    dynamic.remove(b.root);
+    for (const x of b.mats) x.dispose();
+  };
+
+  // Связи «группа -> цель»: тонкий луч цвета группы, пока она недавно стреляла по живому врагу.
+  const links = new Map<number, { mesh: Mesh; mat: MeshBasicMaterial }>();
+  let linkSpecs: { group: number; enemy: number; color: Color }[] = [];
+
+  // Точки входа ближайшей волны: пульсирующее кольцо и подпись.
+  const warnRingGeo = new RingGeometry(0.55, 0.75, 32).rotateX(-Math.PI / 2);
+  const warnMat = new MeshBasicMaterial({ color: COLORS.warning, transparent: true, depthWrite: false });
+  let warnRings: Mesh[] = [];
+  let warnLabels: { el: HTMLElement; world: Vector3 }[] = [];
+  const labelLayer = document.createElement('div');
+  labelLayer.className = 'scene-labels';
+  container.appendChild(labelLayer);
 
   // Цель миссии (объект или колонна) с полосой прочности; позиция и прочность — из снапшота.
   const HP_W = 1.2;
@@ -269,15 +345,20 @@ export function createScene(
     g.ringMat.opacity = selected ? 1 : 0.6;
   };
 
+  /** Единичный цилиндр -> луч от from до to; thick — множитель толщины. */
+  const aim = (obj: Mesh, from: Vec3, to: Vec3, thick = 1) => {
+    const dir = new Vector3(to.x - from.x, to.y - from.y, to.z - from.z);
+    const len = dir.length();
+    obj.position.set((from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2);
+    if (len > 1e-6) obj.quaternion.setFromUnitVectors(UP, dir.divideScalar(len));
+    obj.scale.set(thick, len, thick);
+  };
+
   const spawnEffect = (spec: EffectSpec, now: number) => {
     const mat = new MeshBasicMaterial({ color: spec.color, transparent: true, depthWrite: false });
     const obj = new Mesh(spec.kind === 'tracer' ? tracerGeo : burstGeo, mat);
     if (spec.kind === 'tracer') {
-      const dir = new Vector3(spec.to.x - spec.from.x, spec.to.y - spec.from.y, spec.to.z - spec.from.z);
-      const len = dir.length();
-      obj.position.set((spec.from.x + spec.to.x) / 2, (spec.from.y + spec.to.y) / 2, (spec.from.z + spec.to.z) / 2);
-      if (len > 1e-6) obj.quaternion.setFromUnitVectors(UP, dir.divideScalar(len));
-      obj.scale.set(1, len, 1);
+      aim(obj, spec.from, spec.to);
     } else {
       obj.position.set(spec.at.x, spec.at.y, spec.at.z);
     }
@@ -291,6 +372,19 @@ export function createScene(
     for (const e of enemies.values()) {
       const p = enemyWorld(e, now);
       e.mesh.position.set(p.x, p.y, p.z);
+      e.bar.root.position.set(p.x, p.y + 0.8 * e.scale + 0.3, p.z);
+    }
+    for (const l of linkSpecs) {
+      const from = groups.get(l.group);
+      const to = enemies.get(l.enemy);
+      const link = links.get(l.group);
+      if (from && to && link) aim(link.mesh, groupWorld(from, now), enemyWorld(to, now), 0.45);
+    }
+    const pulse = 1 + 0.2 * Math.sin(now / 180);
+    for (const r of warnRings) r.scale.set(pulse, 1, pulse);
+    for (const l of warnLabels) {
+      const v = l.world.clone().project(camera);
+      l.el.style.transform = `translate(${((v.x + 1) / 2) * container.clientWidth}px, ${((1 - v.y) / 2) * container.clientHeight}px) translate(-50%, -150%)`;
     }
     for (const g of groups.values()) {
       const p = groupWorld(g, now);
@@ -350,7 +444,15 @@ export function createScene(
   el.addEventListener('pointerup', onClick);
 
   let lastTick = -1;
+  let lastState: SimState | undefined;
+  const paintMarks = (state: SimState) => {
+    for (const m of enemyMarks(content, state, selectedGroup)) {
+      const entry = enemies.get(m.id);
+      if (entry) paintBar(entry.bar, m);
+    }
+  };
   const update = (state: SimState) => {
+    lastState = state;
     const now = clock();
     // Движение растягивается ровно на тики между снапшотами (но не больше 8: после паузы вкладки не «ползём»).
     const duration = tweenDuration(Math.min(8, Math.max(1, state.tick - lastTick)), DT);
@@ -364,13 +466,17 @@ export function createScene(
         const cfg = content.enemies[e.type];
         const { mesh, lift, scale } = bodyMesh({ tags: cfg?.tags ?? [e.type], visual: cfg?.visual });
         dynamic.add(mesh);
-        entry = { mesh, lift, scale, x: retarget(undefined, e.pos.x, now, 0), y: retarget(undefined, e.pos.y, now, 0) };
+        const bar = makeBar(cfg && targetKind(cfg.tags));
+        dynamic.add(bar.root);
+        entry = { mesh, lift, scale, bar, x: retarget(undefined, e.pos.x, now, 0), y: retarget(undefined, e.pos.y, now, 0) };
         enemies.set(e.id, entry);
       } else if (isNew) {
         entry.x = retarget(entry.x, e.pos.x, now, duration);
         entry.y = retarget(entry.y, e.pos.y, now, duration);
       }
     }
+
+    paintMarks(state);
 
     if (goal && state.objective) {
       const o = state.objective;
@@ -386,6 +492,7 @@ export function createScene(
       seenGroups.add(g.id);
       const cfg = content.groups[g.type];
       if (!cfg) continue;
+      if (cfg.visual) groupColors.set(g.id, new Color(cfg.visual.color).getHex());
       const onGround = g.phase === 'takeoff' || g.phase === 'rearm';
       let entry = groups.get(g.id);
       if (!entry) {
@@ -439,6 +546,7 @@ export function createScene(
           return e && enemyWorld(e, now);
         },
         basePos: goalWorld(now) ?? baseWorld ?? { x: 0, y: 0, z: 0 },
+        groupColor: (id) => groupColors.get(id),
       });
       for (const spec of plan.effects) spawnEffect(spec, now);
       for (const id of plan.fired) {
@@ -451,14 +559,38 @@ export function createScene(
         const p = enemyWorld(e, now);
         e.mesh.position.set(p.x, p.y, p.z);
         dying.push({ mesh: e.mesh, scale: e.scale, start: now });
+        removeBar(e.bar);
         enemies.delete(id);
       }
     }
     lastTick = state.tick;
 
+    linkSpecs = attackLinks(state).map((l) => ({
+      ...l,
+      color: new Color(groupColors.get(l.group) ?? EFFECT_COLORS.tracer),
+    }));
+    const active = new Set(linkSpecs.map((l) => l.group));
+    for (const [id, link] of links)
+      if (!active.has(id)) {
+        dynamic.remove(link.mesh);
+        link.mat.dispose();
+        links.delete(id);
+      }
+    for (const l of linkSpecs) {
+      let link = links.get(l.group);
+      if (!link) {
+        const mat = new MeshBasicMaterial({ color: l.color, transparent: true, opacity: 0.55, depthWrite: false });
+        link = { mesh: new Mesh(tracerGeo, mat), mat };
+        dynamic.add(link.mesh);
+        links.set(l.group, link);
+      }
+      link.mat.color.copy(l.color);
+    }
+
     for (const [id, entry] of enemies)
       if (!seenEnemies.has(id)) {
         dynamic.remove(entry.mesh);
+        removeBar(entry.bar);
         enemies.delete(id);
       }
     for (const [id, entry] of groups)
@@ -494,6 +626,11 @@ export function createScene(
         for (const x of Array.isArray(m) ? m : [m]) x.dispose();
       }
     });
+    for (const l of links.values()) l.mat.dispose();
+    labelLayer.remove();
+    planeGeo.dispose();
+    warnRingGeo.dispose();
+    warnMat.dispose();
     tracerGeo.dispose();
     burstGeo.dispose();
     zoneDiscGeo.dispose();
@@ -508,8 +645,32 @@ export function createScene(
     if (group === selectedGroup) return;
     selectedGroup = group;
     for (const [id, entry] of groups) paintZone(entry, id === group);
+    if (lastState) paintMarks(lastState);
     draw();
   };
 
-  return { update, setSelectedGroup, dispose };
+  const setWarning = (points: readonly { at: Vec2; label: string }[]) => {
+    const same = points.length === warnRings.length && points.every((p, i) => warnLabels[i]?.el.textContent === p.label);
+    if (same) return;
+    for (const r of warnRings) dynamic.remove(r);
+    labelLayer.replaceChildren();
+    warnRings = points.map((p) => {
+      const ring = new Mesh(warnRingGeo, warnMat);
+      const w = cellToWorld(p.at, size, 0.12);
+      ring.position.set(w.x, w.y, w.z);
+      ring.renderOrder = 2;
+      dynamic.add(ring);
+      return ring;
+    });
+    warnLabels = points.map((p) => {
+      const el = document.createElement('div');
+      el.className = 'scene-label';
+      el.textContent = p.label;
+      labelLayer.appendChild(el);
+      const w = cellToWorld(p.at, size, 0.4);
+      return { el, world: new Vector3(w.x, w.y, w.z) };
+    });
+  };
+
+  return { update, setSelectedGroup, setWarning, dispose };
 }

@@ -23,6 +23,8 @@ export interface EffectContext {
   /** Позиция врага по id в момент до удаления из снапшота. */
   enemyPos(id: number): Vec3 | undefined;
   basePos: Vec3;
+  /** Цвет трассера группы (цвет из конфига); без него — общий. */
+  groupColor?(id: number): number | undefined;
 }
 
 export interface EffectPlan {
@@ -46,7 +48,7 @@ export function planEffects(events: readonly SimEvent[], ctx: EffectContext): Ef
         const to = ctx.enemyPos(ev.enemy);
         plan.fired.push(ev.group);
         if (from && to) {
-          plan.effects.push({ kind: 'tracer', from, to, ttl: 200, color: EFFECT_COLORS.tracer });
+          plan.effects.push({ kind: 'tracer', from, to, ttl: 260, color: ctx.groupColor?.(ev.group) ?? EFFECT_COLORS.tracer });
           plan.effects.push({ kind: 'burst', at: to, ttl: 220, color: EFFECT_COLORS.hit, radius: 0.22 });
         }
         break;

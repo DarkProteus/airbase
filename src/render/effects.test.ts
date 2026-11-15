@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import type { SimEvent } from '../sim';
-import { dyingScale, effectProgress, planEffects, recoilScale } from './effects';
+import { dyingScale, effectProgress, EFFECT_COLORS, planEffects, recoilScale } from './effects';
 import type { EffectContext } from './effects';
 import { retarget, tweenDuration, tweenValue } from './motion';
 
@@ -15,6 +15,13 @@ test('groupShot -> трассер + вспышка попадания, груп�
   expect(plan.effects.map((e) => e.kind)).toEqual(['tracer', 'burst']);
   expect(plan.effects[0]).toMatchObject({ from: { x: 0, y: 1, z: 0 }, to: { x: 3, y: 0, z: 4 } });
   expect(plan.fired).toEqual([1]);
+});
+
+test('трассер берёт цвет группы, если контекст его знает', () => {
+  const colored = planEffects([{ type: 'groupShot', group: 1, enemy: 7, damage: 5 }], { ...ctx, groupColor: (id) => (id === 1 ? 0x4f9de8 : undefined) });
+  expect(colored.effects[0]).toMatchObject({ kind: 'tracer', color: 0x4f9de8 });
+  const plain = planEffects([{ type: 'groupShot', group: 1, enemy: 7, damage: 5 }], { ...ctx, groupColor: () => undefined });
+  expect(plain.effects[0]).toMatchObject({ kind: 'tracer', color: EFFECT_COLORS.tracer });
 });
 
 test('groupShot с неизвестной позицией не падает и не рисует трассер', () => {

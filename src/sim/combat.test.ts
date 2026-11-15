@@ -72,6 +72,16 @@ describe('таргетинг по тегам', () => {
     const sim = createSim(mission(['ground']), content(), 1, [entry('f16')]);
     expect(shots(play(sim, 30), sim, 'f16')).toEqual([]);
     expect(group(sim, 'f16').ammo).toBe(GROUPS.f16!.ammo);
+    expect(group(sim, 'f16').lastShot).toBeUndefined();
+  });
+
+  test('lastShot хранит цель и тик последнего выстрела группы', () => {
+    const sim = createSim(mission(['air']), content(), 1, [entry('f16')]);
+    const ev = shots(play(sim, 20), sim, 'f16');
+    expect(ev.length).toBeGreaterThan(1);
+    const g = group(sim, 'f16');
+    expect(g.lastShot).toEqual({ enemy: ev.at(-1)!.enemy, tick: expect.any(Number) });
+    expect(g.lastShot!.tick).toBeLessThan(sim.state.tick);
   });
 });
 

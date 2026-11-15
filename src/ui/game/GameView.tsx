@@ -4,8 +4,14 @@ import { createScene } from '../../render';
 import { useGameStore } from '../../store/game';
 import { startGame } from './driver';
 import { GroupPanel } from './GroupPanel';
+import { waveWarning } from './markup';
+import { entryLabel, WaveWarning } from './WaveWarning';
 import { groupRows, REJECT_TEXT, rejectionNotice, world, zoneClick } from './selectors';
-import type { LineupEntry, MissionConfig } from '../../sim';
+import type { LineupEntry, MissionConfig, SimState } from '../../sim';
+
+/** Точки входа ближайшей волны для подсветки на карте (пусто, если волна не ожидается). */
+const warningPoints = (mission: MissionConfig, state: SimState) =>
+  (waveWarning(world(mission, CONTENT, state))?.entries ?? []).map((e) => ({ at: e.at, label: entryLabel(e.spawn) }));
 
 /** Холст карты и панель авиагрупп; `lineup` держать стабильным (смена `mission`/`lineup`/`seed` перезапускает бой). Игра мутируется только командами sim через драйвер. */
 export function GameView({ mission, lineup, seed }: { mission: MissionConfig; lineup: readonly LineupEntry[]; seed: number }) {
@@ -31,12 +37,16 @@ export function GameView({ mission, lineup, seed }: { mission: MissionConfig; li
       },
     });
     const first = useGameStore.getState().snapshot;
-    if (first) scene.update(first);
+    if (first) {
+      scene.update(first);
+      scene.setWarning(warningPoints(mission, first));
+    }
     scene.setSelectedGroup(useGameStore.getState().selectedGroup);
     const unsub = useGameStore.subscribe((s, prev) => {
       if (s.selectedGroup !== prev.selectedGroup) scene.setSelectedGroup(s.selectedGroup);
       if (!s.snapshot || s.snapshot === prev.snapshot) return;
       scene.update(s.snapshot);
+      scene.setWarning(warningPoints(mission, s.snapshot));
       const text = rejectionNotice(s.snapshot.events);
       if (text) setNotice(text);
     });
@@ -57,9 +67,11 @@ export function GameView({ mission, lineup, seed }: { mission: MissionConfig; li
   }, [mission, lineup, seed]);
 
   const store = useGameStore.getState;
+  const warning = snapshot && waveWarning(world(mission, CONTENT, snapshot));
   return (
     <>
       <div ref={host} className="game-view" />
+      {warning && <WaveWarning warning={warning} />}
       {snapshot && (
         <GroupPanel
           rows={groupRows(world(mission, CONTENT, snapshot))}

@@ -1,4 +1,6 @@
 import { effectiveGroupStats, groupStats, objectiveGoal, objectiveRoute, rearmTicksLeft, TICK_RATE, toTicks, zoneRejection } from '../../sim';
+import { attackLinks, groupTargetKinds, targetKind } from './markup';
+import type { TargetKind } from './markup';
 import type { Command, Content, MissionConfig, ObjectiveConfig, RejectReason, SimEvent, SimState, SortiePhase, Vec2, World } from '../../sim';
 
 /**
@@ -86,11 +88,22 @@ export interface GroupRow {
   rearmSeconds: number | null;
   /** Радиус зоны патрулирования в клетках (после модификаторов и аур союзников). */
   zoneRadius: number;
+  /** Цвет группы из конфига: им же рисуются её зона и трассеры. */
+  color: string | undefined;
+  /** Типы целей, которые бьёт её оружие; пусто — группа не стреляет. */
+  targets: TargetKind[];
+  /** Кого атакует сейчас (недавний выстрел по живому врагу); null — никого. */
+  attack: { enemyName: string; kind: TargetKind | undefined } | null;
 }
 
 export function groupRows(w: World): GroupRow[] {
+  const links = attackLinks(w.state);
   return w.state.groups.map((g) => {
     const st = groupStats(w, g);
+    const cfg = w.content.groups[g.type];
+    const link = links.find((l) => l.group === g.id);
+    const target = link && w.state.enemies.find((e) => e.id === link.enemy);
+    const enemyCfg = target && w.content.enemies[target.type];
     const capacity = toTicks(st.fuel);
     return {
       id: g.id,
@@ -101,6 +114,9 @@ export function groupRows(w: World): GroupRow[] {
       ammo: { left: g.ammo, max: st.ammo },
       rearmSeconds: g.phase === 'rearm' ? rearmTicksLeft(w, g) / TICK_RATE : null,
       zoneRadius: effectiveGroupStats(w, g).zoneRadius,
+      color: cfg?.visual?.color,
+      targets: cfg ? groupTargetKinds(cfg) : [],
+      attack: enemyCfg ? { enemyName: enemyCfg.name, kind: targetKind(enemyCfg.tags) } : null,
     };
   });
 }
