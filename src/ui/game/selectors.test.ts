@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { CONTENT, DEFAULT_LINEUP, GROUPS, MISSIONS } from '../../content';
 import { createSim, groupStats, snapshot, step, TICK_RATE } from '../../sim';
 import type { Command, SimEvent } from '../../sim';
-import { groupRows, hudLine, objectiveInfo, PHASE_LABEL, REJECT_TEXT, rejectionNotice, world, zoneClick } from './selectors';
+import { groupRows, hudLine, objectiveInfo, PHASE_LABEL, recallCommand, REJECT_TEXT, rejectionNotice, world, zoneClick } from './selectors';
 
 const mission = MISSIONS.evac!;
 const play = (...commands: Command[]) => {
@@ -144,5 +144,19 @@ describe('клик по карте при выбранной группе', () =
     const sim = createSim(mission, CONTENT, 1, DEFAULT_LINEUP);
     step(sim, [zoneClick(world(mission, CONTENT, sim.state), 2, { x: 9, y: 2 })!.command]);
     expect(sim.state.groups[1]!.zone).toEqual({ x: 9, y: 2 });
+  });
+});
+
+describe('кнопка «На базу»', () => {
+  test('доступность строки — та же проверка, что в sim; команда — recall', () => {
+    const sim = createSim(MISSIONS.evac!, CONTENT, 1, [{ group: 'f16', level: 0, zone: { x: 5, y: 5 } }]);
+    const row = () => groupRows(world(MISSIONS.evac!, CONTENT, sim.state))[0]!;
+    expect(row().recallRejection).toBe('notAirborne');
+    while (sim.state.groups[0]!.phase !== 'patrol') step(sim);
+    expect(row().recallRejection).toBeUndefined();
+    step(sim, [recallCommand(sim.state.groups[0]!.id)]);
+    expect(sim.state.groups[0]!.phase).toBe('return');
+    expect(row().recallRejection).toBe('notAirborne');
+    expect(REJECT_TEXT.notAirborne).toBeTruthy();
   });
 });

@@ -6,7 +6,7 @@ import { startGame } from './driver';
 import { GroupPanel } from './GroupPanel';
 import { waveWarning } from './markup';
 import { entryLabel, WaveWarning } from './WaveWarning';
-import { groupRows, REJECT_TEXT, rejectionNotice, world, zoneClick } from './selectors';
+import { groupRows, recallCommand, REJECT_TEXT, rejectionNotice, world, zoneClick } from './selectors';
 import type { LineupEntry, MissionConfig, SimState } from '../../sim';
 
 /** Точки входа ближайшей волны для подсветки на карте (пусто, если волна не ожидается). */
@@ -16,6 +16,7 @@ const warningPoints = (mission: MissionConfig, state: SimState) =>
 /** Холст карты и панель авиагрупп; `lineup` держать стабильным (смена `mission`/`lineup`/`seed` перезапускает бой). Игра мутируется только командами sim через драйвер. */
 export function GameView({ mission, lineup, seed }: { mission: MissionConfig; lineup: readonly LineupEntry[]; seed: number }) {
   const host = useRef<HTMLDivElement>(null);
+  const dispatch = useRef<((command: ReturnType<typeof recallCommand>) => void) | null>(null);
   const snapshot = useGameStore((st) => st.snapshot);
   const selectedGroup = useGameStore((st) => st.selectedGroup);
 
@@ -24,6 +25,7 @@ export function GameView({ mission, lineup, seed }: { mission: MissionConfig; li
     if (!el) return;
     const { setSnapshot, setNotice, selectGroup } = useGameStore.getState();
     const game = startGame(mission, CONTENT, seed, setSnapshot, lineup);
+    dispatch.current = game.dispatch;
     const scene = createScene(el, mission, CONTENT, {
       // Выбрана группа — клик по карте ставит или переносит её зону.
       onMapClick: (cell) => {
@@ -57,6 +59,7 @@ export function GameView({ mission, lineup, seed }: { mission: MissionConfig; li
     return () => {
       window.removeEventListener('keydown', onKey);
       unsub();
+      dispatch.current = null;
       game.stop();
       scene.dispose();
       // Следующий бой не должен видеть снапшот, выбор и сообщение прошлого.
@@ -78,6 +81,7 @@ export function GameView({ mission, lineup, seed }: { mission: MissionConfig; li
           selected={selectedGroup}
           roles={Object.fromEntries(snapshot.groups.map((g) => [g.id, CONTENT.groups[g.type]?.role]))}
           onSelect={(g) => store().selectGroup(g)}
+          onRecall={(g) => dispatch.current?.(recallCommand(g))}
         />
       )}
     </>

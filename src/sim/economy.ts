@@ -1,8 +1,8 @@
 import type { SimState } from './engine';
 import type { AirGroupConfig, Content, MissionConfig, UpgradeConfig, UpgradeOption } from './types';
 
-/** Причина отказа команды боя: зоны патрулирования. */
-export type RejectReason = 'unknownGroup' | 'outOfMap';
+/** Причина отказа команды боя: зона патрулирования вне карты; отзыв группы, которая не в воздухе или уже возвращается. */
+export type RejectReason = 'unknownGroup' | 'outOfMap' | 'notAirborne';
 
 /** Всё, что нужно проверкам: Sim подходит как есть, UI собирает из миссии, контента и снапшота. */
 export interface World {

@@ -379,3 +379,78 @@ describe('команда setZone', () => {
     expect(sim.state.groups.map((g) => g.zone)).toEqual([{ x: 6, y: 5 }, { x: 4, y: 4 }]);
   });
 });
+
+describe('отзыв на базу (recall)', () => {
+  const recall = (sim: ReturnType<typeof createSim>, id = sim.state.groups[0]!.id) => step(sim, [{ type: 'recall', group: id }]);
+
+  test('в патруле и в перелёте группа сразу уходит на возврат, затем перезаряжается и вылетает в ту же зону', () => {
+    for (const phase of ['patrol', 'transit'] as const) {
+      const sim = createSim(mission(), content(), 1, [at(6)]);
+      const g = sim.state.groups[0]!;
+      until(sim, phase);
+      // В перелёте — уже отлетев от аэродрома, иначе возврат занял бы тот же тик.
+      if (phase === 'transit') for (let i = 0; i < 15; i++) step(sim);
+      expect(g.phase).toBe(phase);
+      const fuel = g.fuel;
+      recall(sim);
+      expect(sim.state.events).toContainEqual({ type: 'recalled', group: g.id });
+      expect(g.phase).toBe('return');
+      // Топлива ещё много: возврат вызван приказом, а не баком.
+      expect(fuel).toBeGreaterThan(10 * TICK_RATE);
+      until(sim, 'rearm');
+      expect(g.pos).toEqual({ x: 0, y: 5 });
+      expect(g.sorties).toBe(1);
+      until(sim, 'takeoff');
+      expect(g.fuel).toBe(20 * TICK_RATE);
+      expect(g.ammo).toBe(4);
+      until(sim, 'patrol');
+      expect(g.pos).toEqual({ x: 6, y: 5 });
+    }
+  });
+
+  test('на взлёте, возврате и перезарядке отзыв отклоняется, фаза не меняется', () => {
+    const sim = createSim(mission(), content(), 1, [at(6)]);
+    const g = sim.state.groups[0]!;
+    for (const phase of ['takeoff', 'return', 'rearm'] as const) {
+      if (phase === 'return') {
+        until(sim, 'patrol');
+        recall(sim);
+      } else until(sim, phase);
+      const cmd = { type: 'recall' as const, group: g.id };
+      const tick = g.phaseTick;
+      step(sim, [cmd]);
+      expect(sim.state.events).toContainEqual({ type: 'rejected', command: cmd, reason: 'notAirborne' });
+      // Последний тик фазы может её сменить сам; приказ её не сбрасывает.
+      if (g.phase === phase) expect(g.phaseTick).toBe(tick + 1);
+    }
+  });
+
+  test('неизвестная группа отклоняется', () => {
+    const sim = createSim(mission(), content(), 1, [at(6)]);
+    const cmd = { type: 'recall' as const, group: 99 };
+    step(sim, [cmd]);
+    expect(sim.state.events).toEqual([{ type: 'rejected', command: cmd, reason: 'unknownGroup' }]);
+  });
+
+  test('прерванный вылет не приносит бонус за вылет, следующий полный — приносит', () => {
+    const sim = createSim(mission(), content([group({ income: 30, ammo: 0, weapons: [] })]), 1, [at(6)]);
+    until(sim, 'patrol');
+    recall(sim);
+    until(sim, 'rearm');
+    expect(sim.state.income).toBe(0);
+    expect(sim.state.groups[0]!.sorties).toBe(1);
+    until(sim, 'patrol');
+    until(sim, 'rearm');
+    expect(sim.state.income).toBe(30);
+    expect(sim.state.groups[0]!.sorties).toBe(2);
+  });
+
+  test('детерминизм: одинаковые приказы — одинаковое состояние', () => {
+    const run = () => {
+      const sim = createSim(mission(), content(), 3, [at(6)]);
+      for (let i = 0; i < 600; i++) step(sim, i === 200 ? [{ type: 'recall', group: sim.state.groups[0]!.id }] : []);
+      return snapshot(sim);
+    };
+    expect(run()).toEqual(run());
+  });
+});

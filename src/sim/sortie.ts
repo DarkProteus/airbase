@@ -36,6 +36,8 @@ export interface GroupState {
   sorties: number;
   /** Последний выстрел группы: по кому и в какой тик (для показа «кто кого атакует»). */
   lastShot?: { enemy: number; tick: number };
+  /** Текущий вылет прерван командой recall: бонуса за вылет не будет. Сбрасывается после перезарядки. */
+  recalled?: boolean;
 }
 
 /** Эффективные параметры группы после модификаторов; времена в секундах. */
@@ -74,6 +76,28 @@ export function zoneRejection(w: Pick<World, 'mission' | 'state'>, group: number
   if (!w.state.groups.some((g) => g.id === group)) return 'unknownGroup';
   if (!Number.isFinite(zone.x) || !Number.isFinite(zone.y) || !inMap(w.mission.size, zone)) return 'outOfMap';
   return undefined;
+}
+
+/** Фазы, в которых группу можно отозвать на базу: она в воздухе и ещё не возвращается. */
+export const RECALL_PHASES: readonly SortiePhase[] = ['transit', 'patrol'];
+
+/**
+ * Проверка команды recall: группа должна быть в матче и в воздухе (перелёт или патруль).
+ * На взлёте, возврате и перезарядке отзывать нечего. Движок и UI вызывают одну и ту же функцию.
+ */
+export function recallRejection(w: Pick<World, 'state'>, group: number): RejectReason | undefined {
+  const g = w.state.groups.find((x) => x.id === group);
+  if (!g) return 'unknownGroup';
+  return RECALL_PHASES.includes(g.phase) ? undefined : 'notAirborne';
+}
+
+/**
+ * Отзыв: группа сразу уходит на возврат; дальше — обычный цикл (посадка, перезарядка, новый вылет в ту же зону).
+ * Прерванный вылет считается завершённым, но бонуса за вылет (income) не приносит — иначе отзыв сразу после взлёта печатал бы деньги.
+ */
+export function recallGroup(g: GroupState): void {
+  g.recalled = true;
+  setPhase(g, 'return');
 }
 
 function groupConfig(content: Content, type: string): AirGroupConfig {
@@ -301,7 +325,7 @@ export function stepGroups(sim: Sim): void {
           g.sorties++;
           if (tally) tally.sorties++;
           sim.state.events.push({ type: 'sortieDone', group: g.id, sortie: g.sorties });
-          if (st.income > 0) {
+          if (st.income > 0 && !g.recalled) {
             sim.state.money += st.income;
             sim.state.income += st.income;
             sim.state.events.push({ type: 'income', group: g.id, amount: st.income });
@@ -313,6 +337,7 @@ export function stepGroups(sim: Sim): void {
         if (g.phaseTick >= toTicks(own.rearmTime)) {
           g.fuel = toTicks(own.fuel);
           g.ammo = own.ammo;
+          delete g.recalled;
           setPhase(g, 'takeoff');
         }
         break;

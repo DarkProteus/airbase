@@ -2,7 +2,7 @@ import type { RejectReason } from './economy';
 import { createObjective, objectiveOutcome, objectiveRoute, stepObjective, type ObjectiveState } from './objective';
 import { buildPath, pointAt, type PathData } from './path';
 import { rngNext } from './rng';
-import { auraSources, createGroup, enemySpeed, stepGroups, zoneRejection, type GroupState, type LineupEntry } from './sortie';
+import { auraSources, createGroup, enemySpeed, recallGroup, recallRejection, stepGroups, zoneRejection, type GroupState, type LineupEntry } from './sortie';
 import { createStats, type MatchStats } from './tally';
 import type { Content, MissionConfig, Vec2 } from './types';
 
@@ -34,6 +34,8 @@ export type SimEvent =
   | { type: 'sortieDone'; group: number; sortie: number }
   /** Центр зоны группы перенесён командой setZone. */
   | { type: 'zoneSet'; group: number; zone: Vec2 }
+  /** Группа отозвана на базу командой recall. */
+  | { type: 'recalled'; group: number }
   /** Бонус к награде миссии от группы за завершённый вылет (стат income). */
   | { type: 'income'; group: number; amount: number }
   | { type: 'rejected'; command: Command; reason: RejectReason };
@@ -41,9 +43,10 @@ export type SimEvent =
 /**
  * setZone — центр зоны патрулирования группы (GroupState.id), радиус берётся из конфига группы.
  * Перенос действует сразу в фазах takeoff/transit/patrol; в return/rearm группа не меняет курс и учтёт зону на следующем вылете.
+ * recall — досрочный возврат группы на базу: в перелёте или патруле она сразу уходит на аэродром, перезаряжается и вылетает снова.
  * Покупок и улучшений в бою нет: состав и уровни задаются при создании матча.
  */
-export type Command = { type: 'setZone'; group: number; zone: Vec2 };
+export type Command = { type: 'setZone'; group: number; zone: Vec2 } | { type: 'recall'; group: number };
 
 export interface SimState {
   tick: number;
@@ -148,6 +151,13 @@ function applyCommand(sim: Sim, cmd: Command): void {
       const g = s.groups.find((x) => x.id === cmd.group)!;
       g.zone = { x: cmd.zone.x, y: cmd.zone.y };
       s.events.push({ type: 'zoneSet', group: g.id, zone: { ...g.zone } });
+      return;
+    }
+    case 'recall': {
+      const reason = recallRejection(sim, cmd.group);
+      if (reason) return reject(reason);
+      recallGroup(s.groups.find((x) => x.id === cmd.group)!);
+      s.events.push({ type: 'recalled', group: cmd.group });
     }
   }
 }

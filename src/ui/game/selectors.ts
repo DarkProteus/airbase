@@ -1,4 +1,4 @@
-import { activeSpec, effectiveGroupStats, groupStats, objectiveGoal, objectiveRoute, rearmTicksLeft, TICK_RATE, toTicks, zoneRejection } from '../../sim';
+import { activeSpec, effectiveGroupStats, groupStats, objectiveGoal, objectiveRoute, rearmTicksLeft, recallRejection, TICK_RATE, toTicks, zoneRejection } from '../../sim';
 import { attackLinks, groupTargetKinds, targetKind } from './markup';
 import type { TargetKind } from './markup';
 import type { Command, Content, MissionConfig, ObjectiveConfig, RejectReason, SimEvent, SimState, SortiePhase, Vec2, World } from '../../sim';
@@ -13,6 +13,7 @@ export const world = (mission: MissionConfig, content: Content, state: SimState)
 export const REJECT_TEXT: Record<RejectReason, string> = {
   unknownGroup: 'Авиагруппа не найдена',
   outOfMap: 'Зона вне карты',
+  notAirborne: 'Группа не в воздухе',
 };
 
 /** Текст последнего отказа среди событий тика (undefined — отказов не было). */
@@ -96,6 +97,8 @@ export interface GroupRow {
   targets: TargetKind[];
   /** Кого атакует сейчас (недавний выстрел по живому врагу); null — никого. */
   attack: { enemyName: string; kind: TargetKind | undefined } | null;
+  /** Почему группу сейчас нельзя отправить на базу (та же проверка, что в sim); undefined — можно. */
+  recallRejection: RejectReason | undefined;
 }
 
 export function groupRows(w: World): GroupRow[] {
@@ -120,9 +123,13 @@ export function groupRows(w: World): GroupRow[] {
       color: cfg?.visual?.color,
       targets: cfg ? groupTargetKinds(cfg) : [],
       attack: enemyCfg ? { enemyName: enemyCfg.name, kind: targetKind(enemyCfg.tags) } : null,
+      recallRejection: recallRejection(w, g.id),
     };
   });
 }
+
+/** Кнопка «На базу»: команда recall для группы. */
+export const recallCommand = (group: number): Command => ({ type: 'recall', group });
 
 export type ZoneAction = { command: Command; rejection: RejectReason | undefined };
 
