@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { SoundToggle } from '../audio';
 import { useGameStore } from '../store/game';
 import { BaseScreen } from './base/BaseScreen';
-import { send, sortie, useFlow } from './flow';
+import { resetProgress, send, sortie, useFlow } from './flow';
 import { GameView } from './game/GameView';
 import { Hud } from './game/Hud';
 import { ResultScreen } from './result/ResultScreen';
@@ -28,7 +28,7 @@ export function App() {
   const flow = useFlow();
   switch (flow.screen) {
     case 'base':
-      return <BaseScreen profile={flow.profile} onProfile={(profile) => send({ type: 'profile', profile })} onSortie={sortie} />;
+      return <BaseScreen profile={flow.profile} onProfile={(profile) => send({ type: 'profile', profile })} onSortie={sortie} onReset={resetProgress} />;
     case 'battle':
       return <Battle flow={flow} />;
     case 'result':

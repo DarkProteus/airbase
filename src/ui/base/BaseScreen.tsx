@@ -12,7 +12,8 @@ import {
 import type { AirGroupConfig, Profile, ProfileRejection } from '../../sim';
 import { GroupCard } from '../entity/GroupCard';
 import { viewGroup } from '../entity/model';
-import { missionSummary, rejectionText } from './model';
+import { missionSummary, rejectionText, resetStep } from './model';
+import type { ResetStep } from './model';
 import './base.css';
 
 /** Кнопка действия + причина отказа видимым текстом рядом. */
@@ -31,15 +32,42 @@ function Action({ testId, label, reason, onClick }: { testId: string; label: str
   );
 }
 
+/** Сброс прогресса с подтверждением: кнопка -> вопрос -> «Да, сбросить» / «Отмена». */
+function ResetProgress({ onReset }: { onReset: () => void }) {
+  const [step, setStep] = useState<ResetStep>('idle');
+  const act = (action: 'ask' | 'confirm' | 'cancel') => {
+    const next = resetStep(step, action);
+    setStep(next.step);
+    if (next.reset) onReset();
+  };
+  return step === 'idle' ? (
+    <button type="button" data-testid="reset" onClick={() => act('ask')}>
+      Сбросить прогресс
+    </button>
+  ) : (
+    <div className="base-reset" data-testid="reset-confirm">
+      <span>Весь прогресс будет потерян. Сбросить?</span>
+      <button type="button" data-testid="reset-yes" onClick={() => act('confirm')}>
+        Да, сбросить
+      </button>
+      <button type="button" data-testid="reset-no" onClick={() => act('cancel')}>
+        Отмена
+      </button>
+    </div>
+  );
+}
+
 /** Экран базы: покупка, улучшение, выбор состава и миссии. Операции — из sim, UI только вызывает их; профиль хранит поток экранов. */
 export function BaseScreen({
   profile,
   onProfile: setProfile,
   onSortie,
+  onReset,
 }: {
   profile: Profile;
   onProfile: (profile: Profile) => void;
   onSortie: (missionId: string) => void;
+  onReset: () => void;
 }) {
   const [missionId, setMissionId] = useState(() => Object.keys(MISSIONS)[0]!);
   const sortieReason = sortieRejection(profile, LINEUP_SIZE);
@@ -85,6 +113,7 @@ export function BaseScreen({
           Состав: <strong data-testid="lineup-count">{profile.lineup.length}/{LINEUP_SIZE}</strong>
         </div>
         <Action testId="sortie" label="На вылет" reason={sortieReason} onClick={() => onSortie(missionId)} />
+        <ResetProgress onReset={onReset} />
       </header>
       <section className="base-missions" data-testid="missions">
         {Object.values(MISSIONS).map((m) => (

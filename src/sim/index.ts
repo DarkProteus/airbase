@@ -6,6 +6,7 @@ export * from './path';
 export * from './profile';
 export * from './reward';
 export * from './rng';
+export * from './save';
 export * from './sortie';
 export * from './stats';
 export * from './types';

@@ -27,3 +27,13 @@ export function missionSummary(mission: MissionConfig): string {
   const { win = 0, loss = 0 } = mission.reward ?? {};
   return `${kind} · награда: победа ${win}, поражение ${loss}`;
 }
+
+/** Сброс прогресса в два шага: сначала вопрос, потом сам сброс. */
+export type ResetStep = 'idle' | 'confirm';
+
+/** Переход шага сброса; `reset: true` — подтверждено, прогресс надо сбросить. Подтвердить, не спросив, нельзя. */
+export function resetStep(step: ResetStep, action: 'ask' | 'confirm' | 'cancel'): { step: ResetStep; reset: boolean } {
+  if (action === 'ask') return { step: 'confirm', reset: false };
+  if (action === 'confirm' && step === 'confirm') return { step: 'idle', reset: true };
+  return { step: 'idle', reset: false };
+}

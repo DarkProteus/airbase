@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { MISSIONS } from '../../content';
 import { PROFILE_REJECTIONS } from '../../sim';
-import { missionSummary, OBJECTIVE_LABEL, REJECTION_TEXT, rejectionText } from './model';
+import { missionSummary, OBJECTIVE_LABEL, REJECTION_TEXT, rejectionText, resetStep } from './model';
 
 test('у каждой причины отказа есть непустой русский текст', () => {
   for (const reason of PROFILE_REJECTIONS) {
@@ -24,4 +24,12 @@ test('у каждого типа цели есть подпись, а сводк
     expect(text).toContain(String(m.reward!.win));
     expect(text).toContain(String(m.reward!.loss));
   }
+});
+
+test('сброс прогресса: сначала вопрос, сброс только после подтверждения, отмена ничего не сбрасывает', () => {
+  expect(resetStep('idle', 'ask')).toEqual({ step: 'confirm', reset: false });
+  expect(resetStep('confirm', 'confirm')).toEqual({ step: 'idle', reset: true });
+  expect(resetStep('confirm', 'cancel')).toEqual({ step: 'idle', reset: false });
+  // подтверждение без вопроса сбросом не считается
+  expect(resetStep('idle', 'confirm')).toEqual({ step: 'idle', reset: false });
 });

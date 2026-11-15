@@ -53,3 +53,4 @@
 }
 .base .base-mission span { font-size: 12px; color: #9aa7ba; }
 .base .base-mission[data-selected='true'] { border-color: #ffd166; background: #34405e; }
+.base-reset { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #ff9aa5; }
