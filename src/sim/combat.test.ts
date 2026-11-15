@@ -222,10 +222,75 @@ describe('новые ауры одними данными', () => {
   });
 });
 
+describe('E-3 Sentry и KC-135 из реестра контента', () => {
+  const e3 = GROUPS.e3!;
+  const tanker = GROUPS.kc135!;
+  const f16 = GROUPS.f16!;
+  const auraOf = (g: AirGroupConfig, stat: string) => g.auras.find((m) => m.stat === stat && m.scope === 'aura')!;
+  const patrolling = (sim: Sim, ...types: string[]) => {
+    for (const t of types) until(sim, t, 'patrol');
+  };
+
+  test('E-3: пока патрулирует, радиус зоны союзника в его зоне больше, вне зоны и до выхода в патруль — обычный', () => {
+    const bonus = auraOf(e3, 'range').value;
+    const sim = createSim(mission([]), content(), 1, [entry('f16'), entry('e3'), entry('growler', FAR)]);
+    const fighter = group(sim, 'f16');
+    expect(effectiveGroupStats(sim, fighter).zoneRadius).toBe(f16.zoneRadius);
+    patrolling(sim, 'f16', 'e3');
+    expect(effectiveGroupStats(sim, fighter).zoneRadius).toBe(f16.zoneRadius + bonus);
+    // Сам ДРЛО свою ауру не получает; союзник вне зоны ДРЛО — тоже.
+    expect(effectiveGroupStats(sim, group(sim, 'e3')).zoneRadius).toBe(e3.zoneRadius);
+    const apart = createSim(mission([]), content(), 1, [entry('f16', FAR), entry('e3')]);
+    patrolling(apart, 'f16', 'e3');
+    expect(effectiveGroupStats(apart, group(apart, 'f16')).zoneRadius).toBe(f16.zoneRadius);
+    // Когда ДРЛО уходит на возврат, бонус пропадает.
+    until(sim, 'e3', 'return');
+    expect(effectiveGroupStats(sim, fighter).zoneRadius).toBe(f16.zoneRadius);
+  });
+
+  test('KC-135: союзник в его зоне тратит топливо медленнее и патрулирует дольше; вне зоны — как обычно', () => {
+    const mult = auraOf(tanker, 'fuel').value;
+    const burned = (lineup: LineupEntry[]) => {
+      const sim = createSim(mission([]), content(), 1, lineup);
+      patrolling(sim, ...lineup.map((l) => l.group));
+      const g = group(sim, 'f16');
+      const before = g.fuel;
+      play(sim, 10);
+      return { burned: before - g.fuel, sim };
+    };
+    const alone = burned([entry('f16')]);
+    const refuelled = burned([entry('f16'), entry('kc135')]);
+    const apart = burned([entry('f16', FAR), entry('kc135')]);
+    expect(alone.burned).toBe(10 * TICK_RATE);
+    expect(refuelled.burned).toBeCloseTo((10 * TICK_RATE) / mult, 6);
+    expect(apart.burned).toBe(10 * TICK_RATE);
+    expect(effectiveGroupStats(refuelled.sim, group(refuelled.sim, 'f16')).fuel).toBe(f16.fuel * mult);
+    // Заправщик свой бак аурой не растягивает.
+    expect(effectiveGroupStats(refuelled.sim, group(refuelled.sim, 'kc135')).fuel).toBe(tanker.fuel);
+  });
+
+  test('KC-135: топливо не уходит в минус и не скачет при выходе из ауры, исход детерминирован', () => {
+    const run = () => {
+      const sim = createSim(mission([]), content(), 1, [entry('f16'), entry('kc135')]);
+      const fuel: number[] = [];
+      for (let i = 0; i < 250 * TICK_RATE; i++) {
+        step(sim, i === 20 * TICK_RATE ? [{ type: 'setZone', group: group(sim, 'kc135').id, zone: FAR }] : []);
+        fuel.push(group(sim, 'f16').fuel);
+      }
+      return fuel;
+    };
+    const fuel = run();
+    expect(Math.min(...fuel)).toBeGreaterThanOrEqual(0);
+    // Топливо в полёте только убывает (между вылетами — полная дозаправка).
+    for (let i = 1; i < fuel.length; i++) if (fuel[i]! > fuel[i - 1]!) expect(fuel[i]).toBe(f16.fuel * TICK_RATE);
+    expect(run()).toEqual(fuel);
+  });
+});
+
 describe('контент = данные', () => {
-  test('четыре группы с разными ролями описаны как AirGroupConfig в реестре', () => {
-    expect(Object.keys(GROUPS).sort()).toEqual(['a10', 'c130', 'f16', 'growler']);
-    expect(new Set(Object.values(GROUPS).map((g) => g.role)).size).toBe(4);
+  test('шесть групп с разными ролями описаны как AirGroupConfig в реестре', () => {
+    expect(Object.keys(GROUPS).sort()).toEqual(['a10', 'c130', 'e3', 'f16', 'growler', 'kc135']);
+    expect(new Set(Object.values(GROUPS).map((g) => g.role)).size).toBe(6);
     for (const [id, g] of Object.entries(GROUPS)) expect(g.id).toBe(id);
   });
 

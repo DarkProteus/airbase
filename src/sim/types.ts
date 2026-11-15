@@ -73,12 +73,17 @@ export interface VisualConfig {
   altitude?: number;
 }
 
+/** Вид выстрела для рендера: gun — очередь трассеров, missile — ракета с дымным следом. */
+export type ShotKind = 'gun' | 'missile';
+
 /** Оружие группы: бьёт только врагов, у которых есть хотя бы один из целевых тегов (пустой список — любых). */
 export interface WeaponConfig {
   damage: number;
   /** Выстрелов в секунду. */
   fireRate: number;
   targetTags: string[];
+  /** Как выглядит выстрел. Только для рендера, sim не читает; нет — выводится из урона и скорострельности. */
+  shot?: ShotKind;
 }
 
 /**

@@ -10,6 +10,7 @@ import type { ModelConfig } from '../sim';
 const DARK = '#2b2f36';
 const GLASS = '#1c2a3a';
 const LIGHT = '#e4e9ef';
+const BOOM = '#e8833a';
 
 /** F-16: одно сопло, стреловидное крыло, каплевидный фонарь, воздухозаборник под брюхом, один киль. */
 const f16: ModelConfig = {
@@ -87,6 +88,46 @@ const c130: ModelConfig = {
   ],
 };
 
+/** E-3 Sentry: четырёхмоторный лайнер, над фюзеляжем на пилоне светлая «тарелка» обтекателя РЛС. */
+const e3: ModelConfig = {
+  id: 'e3',
+  parts: [
+    { shape: 'cylinder', size: [0.2, 0.98, 0.2], offset: [-0.02, 0, 0], rotation: [0, 0, 90], segments: 8 },
+    { shape: 'sphere', size: [0.24, 0.2, 0.2], offset: [0.48, 0, 0], segments: 8 },
+    { shape: 'box', size: [0.08, 0.05, 0.14], offset: [0.4, 0.09, 0], color: GLASS },
+    { shape: 'box', size: [0.3, 0.035, 0.56], offset: [0.0, -0.03, 0.3], rotation: [0, -25, 0] },
+    { shape: 'box', size: [0.3, 0.035, 0.56], offset: [0.0, -0.03, -0.3], rotation: [0, 25, 0] },
+    { shape: 'cylinder', size: [0.1, 0.24, 0.1], offset: [0.06, -0.1, 0.2], rotation: [0, 0, 90], color: DARK, segments: 6 },
+    { shape: 'cylinder', size: [0.1, 0.24, 0.1], offset: [0.06, -0.1, -0.2], rotation: [0, 0, 90], color: DARK, segments: 6 },
+    { shape: 'cylinder', size: [0.1, 0.24, 0.1], offset: [-0.06, -0.1, 0.42], rotation: [0, 0, 90], color: DARK, segments: 6 },
+    { shape: 'cylinder', size: [0.1, 0.24, 0.1], offset: [-0.06, -0.1, -0.42], rotation: [0, 0, 90], color: DARK, segments: 6 },
+    { shape: 'box', size: [0.16, 0.03, 0.46], offset: [-0.46, 0.03, 0] },
+    { shape: 'box', size: [0.24, 0.28, 0.035], offset: [-0.44, 0.2, 0], rotation: [0, 0, 16] },
+    { shape: 'box', size: [0.06, 0.14, 0.06], offset: [-0.02, 0.16, 0], color: DARK },
+    { shape: 'cylinder', size: [0.54, 0.07, 0.54], offset: [-0.02, 0.27, 0], color: LIGHT, segments: 8 },
+  ],
+};
+
+/** KC-135: четырёхмоторный лайнер, под хвостом оранжевая штанга дозаправки с оперением. */
+const kc135: ModelConfig = {
+  id: 'kc135',
+  parts: [
+    { shape: 'cylinder', size: [0.2, 0.9, 0.2], offset: [-0.02, 0, 0], rotation: [0, 0, 90], segments: 8 },
+    { shape: 'sphere', size: [0.22, 0.2, 0.2], offset: [0.44, 0, 0], segments: 8 },
+    { shape: 'box', size: [0.08, 0.05, 0.14], offset: [0.36, 0.09, 0], color: GLASS },
+    { shape: 'box', size: [0.3, 0.035, 0.56], offset: [0.0, -0.03, 0.3], rotation: [0, -25, 0] },
+    { shape: 'box', size: [0.3, 0.035, 0.56], offset: [0.0, -0.03, -0.3], rotation: [0, 25, 0] },
+    { shape: 'cylinder', size: [0.1, 0.24, 0.1], offset: [0.06, -0.1, 0.2], rotation: [0, 0, 90], color: DARK, segments: 6 },
+    { shape: 'cylinder', size: [0.1, 0.24, 0.1], offset: [0.06, -0.1, -0.2], rotation: [0, 0, 90], color: DARK, segments: 6 },
+    { shape: 'cylinder', size: [0.1, 0.24, 0.1], offset: [-0.06, -0.1, 0.42], rotation: [0, 0, 90], color: DARK, segments: 6 },
+    { shape: 'cylinder', size: [0.1, 0.24, 0.1], offset: [-0.06, -0.1, -0.42], rotation: [0, 0, 90], color: DARK, segments: 6 },
+    { shape: 'box', size: [0.16, 0.03, 0.46], offset: [-0.44, 0.03, 0] },
+    { shape: 'box', size: [0.24, 0.28, 0.035], offset: [-0.42, 0.2, 0], rotation: [0, 0, 16] },
+    { shape: 'box', size: [0.3, 0.04, 0.05], offset: [-0.58, -0.09, 0], rotation: [0, 0, 18], color: BOOM },
+    { shape: 'box', size: [0.1, 0.02, 0.22], offset: [-0.72, -0.14, 0], color: BOOM },
+  ],
+};
+
 /** Дрон: квадрокоптер — тёмный корпус, крестовина и четыре диска винтов цвета сущности. */
 const drone: ModelConfig = {
   id: 'drone',
@@ -145,4 +186,4 @@ const bomber: ModelConfig = {
   ],
 };
 
-export const MODELS = { f16, a10, growler, c130, drone, runner, tank, bomber } satisfies Record<string, ModelConfig>;
+export const MODELS = { f16, a10, growler, c130, e3, kc135, drone, runner, tank, bomber } satisfies Record<string, ModelConfig>;

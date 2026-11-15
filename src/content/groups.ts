@@ -14,7 +14,7 @@ const f16: AirGroupConfig = {
   takeoffTime: 2,
   rearmTime: 5,
   zoneRadius: 3,
-  weapons: [{ damage: 12, fireRate: 2.5, targetTags: ['air'] }],
+  weapons: [{ damage: 12, fireRate: 2.5, targetTags: ['air'], shot: 'gun' }],
   auras: [],
   upgrades: [
     { cost: 80, modifiers: [{ stat: 'damage', op: 'mul', value: 1.3, scope: 'self' }] },
@@ -36,7 +36,7 @@ const a10: AirGroupConfig = {
   takeoffTime: 2,
   rearmTime: 6,
   zoneRadius: 2.5,
-  weapons: [{ damage: 45, fireRate: 1.2, targetTags: ['ground'] }],
+  weapons: [{ damage: 45, fireRate: 1.2, targetTags: ['ground'], shot: 'missile' }],
   auras: [],
   upgrades: [
     { cost: 90, modifiers: [{ stat: 'damage', op: 'mul', value: 1.3, scope: 'self' }] },
@@ -87,11 +87,57 @@ const c130: AirGroupConfig = {
   visual: { shape: 'cube', model: MODELS.c130, color: '#d9c25c', scale: 1.2 },
 };
 
+/** ДРЛО: не стреляет; пока патрулирует, в его зоне у союзных групп шире зона патруля. */
+const e3: AirGroupConfig = {
+  id: 'e3',
+  name: 'E-3 Sentry',
+  role: 'awacs',
+  cost: 130,
+  tags: ['air', 'awacs'],
+  speed: 2,
+  fuel: 80,
+  ammo: 0,
+  takeoffTime: 3,
+  rearmTime: 7,
+  zoneRadius: 3.5,
+  weapons: [],
+  auras: [{ stat: 'range', op: 'add', value: 2.5, scope: 'aura' }],
+  upgrades: [
+    { cost: 100, modifiers: [{ stat: 'range', op: 'add', value: 0.5, scope: 'self' }] },
+    { cost: 150, modifiers: [{ stat: 'range', op: 'add', value: 0.5, scope: 'aura' }] },
+  ],
+  visual: { shape: 'cylinder', model: MODELS.e3, color: '#3fc1c9', scale: 1.2 },
+};
+
+/** Заправщик: не стреляет; пока патрулирует, у союзных групп в его зоне бак «больше» — они дольше держатся в патруле. */
+const kc135: AirGroupConfig = {
+  id: 'kc135',
+  name: 'KC-135',
+  role: 'tanker',
+  cost: 110,
+  tags: ['air', 'tanker'],
+  speed: 2,
+  fuel: 70,
+  ammo: 0,
+  takeoffTime: 3,
+  rearmTime: 6,
+  zoneRadius: 3,
+  weapons: [],
+  auras: [{ stat: 'fuel', op: 'mul', value: 1.5, scope: 'aura' }],
+  upgrades: [
+    { cost: 90, modifiers: [{ stat: 'fuel', op: 'add', value: 20, scope: 'self' }] },
+    { cost: 140, modifiers: [{ stat: 'fuel', op: 'mul', value: 1.2, scope: 'aura' }] },
+  ],
+  visual: { shape: 'cylinder', model: MODELS.kc135, color: '#c9d4e0', scale: 1.2 },
+};
+
 export const GROUPS: Record<string, AirGroupConfig> = {
   [f16.id]: f16,
   [a10.id]: a10,
   [growler.id]: growler,
   [c130.id]: c130,
+  [e3.id]: e3,
+  [kc135.id]: kc135,
 };
 
 /** Сколько групп игрок берёт на вылет. */
