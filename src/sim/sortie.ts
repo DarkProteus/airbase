@@ -265,6 +265,7 @@ export function stepGroups(sim: Sim): void {
           sim.state.events.push({ type: 'sortieDone', group: g.id, sortie: g.sorties });
           if (st.income > 0) {
             sim.state.money += st.income;
+            sim.state.income += st.income;
             sim.state.events.push({ type: 'income', group: g.id, amount: st.income });
           }
           setPhase(g, 'rearm');

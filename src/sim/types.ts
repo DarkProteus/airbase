@@ -151,6 +151,14 @@ export interface MissionConfig {
   airfield: Vec2;
   baseLives: number;
   waves: Wave[];
+  /** Награда за исход миссии, сверх убийств и бонусов групп; без поля — 0 (см. reward.ts). */
+  reward?: MissionReward;
+}
+
+/** Базовая награда миссии: за победу и за поражение (утешительная). */
+export interface MissionReward {
+  win: number;
+  loss: number;
 }
 
 export interface Content {

@@ -46,6 +46,10 @@ export interface SimState {
   rng: number;
   /** Награда, заработанная в миссии: убийства и бонусы групп за вылеты. */
   money: number;
+  /** Убито врагов за матч. */
+  kills: number;
+  /** Часть `money` от бонусов групп за завершённые вылеты (стат income). */
+  income: number;
   lives: number;
   status: 'running' | 'won' | 'lost';
   /** Сколько волн уже стартовало (индекс следующей волны). */
@@ -105,6 +109,8 @@ export function createSim(mission: MissionConfig, content: Content, seed: number
       tick: 0,
       rng: seed >>> 0,
       money: 0,
+      kills: 0,
+      income: 0,
       lives: mission.baseLives,
       status: 'running',
       wave: 0,
@@ -150,6 +156,7 @@ export function damageEnemy(sim: Sim, enemyId: number, amount: number): boolean 
   const reward = sim.content.enemies[e.type]!.reward;
   s.enemies.splice(i, 1);
   s.money += reward;
+  s.kills++;
   s.events.push({ type: 'kill', enemy: e.id, reward });
   return true;
 }

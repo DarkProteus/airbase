@@ -1,33 +1,37 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { SoundToggle } from '../audio';
-import { DEFAULT_LINEUP, DEFAULT_ZONES, LINEUP_SIZE, MISSIONS, START_PROFILE } from '../content';
-import { profileLineup, sortieRejection } from '../sim';
-import type { LineupEntry, Profile } from '../sim';
-import { useProfileStore } from '../store/profile';
+import { useGameStore } from '../store/game';
 import { BaseScreen } from './base/BaseScreen';
+import { send, sortie, useFlow } from './flow';
 import { GameView } from './game/GameView';
 import { Hud } from './game/Hud';
+import { ResultScreen } from './result/ResultScreen';
 import './game/game.css';
 
-/** Миссия по умолчанию; до экрана выбора (TASK-17) другую можно открыть параметром адреса `?mission=<id>`. */
-const MISSION_ID = new URLSearchParams(location.search).get('mission') ?? '';
-const MISSION = MISSIONS[MISSION_ID] ?? MISSIONS.evac!;
-
-/** Состав профиля, если он полон; иначе — состав по умолчанию (dev-шорткат `?mission=`). */
-const lineupFor = (profile: Profile): LineupEntry[] =>
-  sortieRejection(profile, LINEUP_SIZE) ? DEFAULT_LINEUP : profileLineup(profile, DEFAULT_ZONES);
-
-export function App() {
-  // До потока экранов (TASK-17): база или бой с фиксированным составом; `?mission=<id>` сразу открывает бой.
-  const [lineup, setLineup] = useState<LineupEntry[] | null>(() =>
-    MISSIONS[MISSION_ID] ? lineupFor(useProfileStore.getState().profile ?? START_PROFILE) : null,
-  );
-  if (!lineup) return <BaseScreen onSortie={(profile) => setLineup(lineupFor(profile))} />;
+/** Бой: когда матч закончился, поток переходит на итог; повторные вызовы эффекта безвредны (переход идемпотентен). */
+function Battle({ flow }: { flow: Extract<ReturnType<typeof useFlow>, { screen: 'battle' }> }) {
+  const final = useGameStore((s) => (s.snapshot && s.snapshot.status !== 'running' ? s.snapshot : null));
+  useEffect(() => {
+    if (final) send({ type: 'finish', final });
+  }, [final]);
   return (
     <div className="game-root">
-      <GameView mission={MISSION} lineup={lineup} />
-      <Hud mission={MISSION} />
+      <GameView key={flow.seed} mission={flow.mission} lineup={flow.lineup} seed={flow.seed} />
+      <Hud mission={flow.mission} />
       <SoundToggle />
     </div>
   );
+}
+
+/** Поток экранов: база -> бой -> итог -> база; состояние и переходы — в sim (flowStep), здесь только показ. */
+export function App() {
+  const flow = useFlow();
+  switch (flow.screen) {
+    case 'base':
+      return <BaseScreen profile={flow.profile} onProfile={(profile) => send({ type: 'profile', profile })} onSortie={sortie} />;
+    case 'battle':
+      return <Battle flow={flow} />;
+    case 'result':
+      return <ResultScreen mission={flow.mission} result={flow.result} reward={flow.reward} currency={flow.profile.currency} onHome={() => send({ type: 'home' })} />;
+  }
 }

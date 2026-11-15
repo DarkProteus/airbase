@@ -7,6 +7,7 @@ const evac: MissionConfig = {
   size: { w: 13, h: 11 },
   airfield: { x: 12, y: 1 },
   objective: { type: 'defend', pos: { x: 5, y: 5 }, hp: 20, duration: 90 },
+  reward: { win: 120, loss: 30 },
   spawns: [
     { x: 0, y: 1 },
     { x: 0, y: 9 },
@@ -40,6 +41,7 @@ const convoy: MissionConfig = {
     hp: 24,
     speed: 0.25,
   },
+  reward: { win: 140, loss: 30 },
   spawns: [
     { x: 0, y: 0 },
     { x: 6, y: 10 },
