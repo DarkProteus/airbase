@@ -229,6 +229,9 @@ export interface EnemyBaseConfig {
   roster: BaseRosterEntry[];
 }
 
+/** Преграда рельефа: вода и горы закрывают клетку наземным врагам, высокий хребет — и наземным, и воздушным (см. terrain.ts). */
+export type TerrainKind = 'water' | 'mountain' | 'ridge';
+
 export interface MissionConfig {
   id: string;
   name: string;
@@ -240,6 +243,11 @@ export interface MissionConfig {
   objective?: ObjectiveConfig;
   /** Вражеские базы (миссии с целью): откуда и какие враги идут. */
   bases?: EnemyBaseConfig[];
+  /**
+   * Рельеф-преграда: `size.h` строк по `size.w` символов, строка — ряд клеток y, символ — клетка x.
+   * `.` — свободно, `~` — вода, `^` — горы, `#` — высокий хребет. Враги обходят закрытые им клетки; рендер рисует рельеф отсюда же.
+   */
+  terrain?: string[];
   /** Аэродром: клетка на краю карты, откуда взлетают и куда возвращаются авиагруппы. */
   airfield: Vec2;
   baseLives: number;

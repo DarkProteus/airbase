@@ -1,5 +1,5 @@
-import { pointAt } from '../sim';
-import type { MissionConfig, PathData, Vec2 } from '../sim';
+import { pointAt, terrainCells } from '../sim';
+import type { MissionConfig, PathData, TerrainCell, TerrainKind, Vec2 } from '../sim';
 import { headingOf } from './motion';
 
 /**
@@ -61,6 +61,25 @@ export interface DecorItem {
   tone: number;
 }
 
+/** Вершина горы или хребта: конус с основанием `radius` и высотой `height`, клетки. */
+export interface PeakItem {
+  kind: Exclude<TerrainKind, 'water'>;
+  at: Vec2;
+  radius: number;
+  height: number;
+  rotation: number;
+  /** Оттенок 0..1 (разброс цвета). */
+  tone: number;
+  /** Снежная шапка: только у высоких вершин хребта. */
+  snow: boolean;
+}
+
+/** Рельеф-преграда: клетки из `MissionConfig.terrain` (те же, что читает sim) и вершины на них. */
+export interface TerrainLayout {
+  cells: TerrainCell[];
+  peaks: PeakItem[];
+}
+
 export interface EnvironmentLayout {
   road?: RoadLayout;
   airfield: AirfieldLayout;
@@ -70,8 +89,10 @@ export interface EnvironmentLayout {
   building?: Vec2;
   /** Деревья и камни внутри карты. */
   decor: DecorItem[];
-  /** Холмы за краем карты (рельеф): не заходят на поле боя. */
+  /** Холмы за краем карты (проходимый фон): не заходят на поле боя. */
   hills: DecorItem[];
+  /** Преграды на поле боя: вода, горы, хребты. */
+  terrain: TerrainLayout;
 }
 
 // --- хеш и шум ---
@@ -257,6 +278,62 @@ function occupied(core: Core): Feature[] {
   return out;
 }
 
+// --- рельеф-преграда ---
+
+/**
+ * Высота вершин, клетки: горы ниже полёта воздушных врагов (0,9) — над ними летают;
+ * хребет заметно выше любого полёта — его облетают все.
+ */
+export const PEAK_HEIGHT: Record<PeakItem['kind'], readonly [number, number]> = { mountain: [0.4, 0.62], ridge: [1.8, 2.4] };
+
+/** Вершины на клетках гор и хребтов: по две на клетку, основания не выходят за клетку. Вода — плоская, вершин нет. */
+export function layoutTerrain(mission: MissionConfig): TerrainLayout {
+  const cells = terrainCells(mission);
+  const peaks: PeakItem[] = [];
+  for (const c of cells) {
+    if (c.kind === 'water') continue;
+    const [lo, hi] = PEAK_HEIGHT[c.kind];
+    const ridge = c.kind === 'ridge';
+    for (let i = 0; i < 2; i++) {
+      const salt = 40 + i * 10;
+      // Главная вершина крупная и у центра клетки, вторая — меньше и сбоку: гряда выглядит неровной.
+      const radius = i === 0 ? (ridge ? 0.47 : 0.4) : 0.26;
+      const reach = 0.5 - radius;
+      const k = i === 0 ? 1 : 0.55;
+      peaks.push({
+        kind: c.kind,
+        at: { x: c.x + (hash01(c.x, c.y, salt) * 2 - 1) * reach, y: c.y + (hash01(c.x, c.y, salt + 1) * 2 - 1) * reach },
+        radius,
+        height: (lo + (hi - lo) * hash01(c.x, c.y, salt + 2)) * k,
+        rotation: hash01(c.x, c.y, salt + 3) * Math.PI * 2,
+        tone: hash01(c.x, c.y, salt + 4),
+        snow: ridge && i === 0,
+      });
+    }
+  }
+  return { cells, peaks };
+}
+
+/** Точки вдоль ломаной с шагом `step` (маршрут врагов на карте); `skip` — отступ от начала и конца. */
+export function routeDots(points: readonly Vec2[], step = 0.5, skip = 0.8): Vec2[] {
+  const out: Vec2[] = [];
+  let total = 0;
+  for (let i = 1; i < points.length; i++) total += Math.hypot(points[i]!.x - points[i - 1]!.x, points[i]!.y - points[i - 1]!.y);
+  let walked = 0;
+  let next = skip;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!;
+    const b = points[i]!;
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    for (; next <= walked + len && next <= total - skip; next += step) {
+      const t = len === 0 ? 0 : (next - walked) / len;
+      out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    }
+    walked += len;
+  }
+  return out;
+}
+
 // --- декор ---
 
 const DECOR_MARGIN = 0.7;
@@ -270,6 +347,8 @@ export function hillHeight(radius: number): number {
 function layoutDecor(core: Core): { decor: DecorItem[]; hills: DecorItem[] } {
   const { w, h } = core.mission.size;
   const feats = occupied(core);
+  // Деревья и камни не растут на преградах: вода, горы и хребты читаются чисто.
+  const barred = new Set(terrainCells(core.mission).map((c) => c.y * w + c.x));
   const salt = w * 131 + h * 17;
   const decor: DecorItem[] = [];
   for (let cy = 0; cy < h; cy++)
@@ -284,6 +363,7 @@ function layoutDecor(core: Core): { decor: DecorItem[]; hills: DecorItem[] } {
         y: Math.min(h - 0.5 - MAP_MARGIN, Math.max(-0.5 + MAP_MARGIN, cy + (hash01(cx, cy, salt + 4) - 0.5) * 0.7)),
       };
       if (feats.some((f) => featureGap(f, at) < DECOR_MARGIN)) continue;
+      if (barred.has(Math.round(at.y) * w + Math.round(at.x))) continue;
       decor.push({
         kind,
         at,
@@ -334,7 +414,7 @@ function layoutDecor(core: Core): { decor: DecorItem[]; hills: DecorItem[] } {
 /** Полная раскладка окружения карты. */
 export function layoutEnvironment(mission: MissionConfig): EnvironmentLayout {
   const core = layoutCore(mission);
-  return { road: core.road, airfield: core.airfield, gates: core.gates, building: core.building, ...layoutDecor(core) };
+  return { road: core.road, airfield: core.airfield, gates: core.gates, building: core.building, ...layoutDecor(core), terrain: layoutTerrain(mission) };
 }
 
 // --- колонна ---

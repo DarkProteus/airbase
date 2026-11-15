@@ -1,5 +1,5 @@
-import { baseNewTypes, baseTypes, enemyDetected, everyModifier, TICK_RATE, weaponHits } from '../../sim';
-import type { AirGroupConfig, Content, MissionConfig, SimState, Vec2, World } from '../../sim';
+import { baseNewTypes, baseTypes, enemyDetected, everyModifier, MOVE_CLASSES, moveClass, navRoute, terrainCells, terrainNav, TERRAIN_BLOCKS, TICK_RATE, weaponHits } from '../../sim';
+import type { AirGroupConfig, Content, MissionConfig, MoveClass, SimState, TerrainKind, Vec2, World } from '../../sim';
 
 /**
  * Боевая разметка: чистые функции от снапшота sim и конфигов. Рендер и React только рисуют результат.
@@ -167,4 +167,50 @@ export function waveWarning(w: World): WaveWarning | null {
   }
   const entries = [...bySpawn.values()].sort((a, b) => a.base - b.base);
   return { wave: s.wave + 1, waves: mission.waves.length, seconds, total, entries };
+}
+
+/** Маршрут врагов ближайшей волны на карте: от базы к текущей позиции цели в обход преград. */
+export interface RouteMark {
+  /** Индекс вражеской базы из `MissionConfig.bases`. */
+  base: number;
+  /** Кто идёт этим маршрутом: наземные обходят воду и горы, воздушные — только хребты. */
+  kind: MoveClass;
+  points: Vec2[];
+}
+
+/**
+ * Маршруты ближайшей волны (пока показано предупреждение о ней): по одному на базу и класс движения её врагов в этой волне.
+ * Считаются той же навигацией, что ведёт врагов в sim; за колонной маршрут пересчитывается вместе с её позицией.
+ */
+export function warningRoutes(w: World): RouteMark[] {
+  const goal = w.state.objective?.pos;
+  const warning = goal && waveWarning(w);
+  if (!warning) return [];
+  const nav = terrainNav(w.mission);
+  return warning.entries.flatMap((e) => {
+    const classes = new Set(e.items.flatMap((i) => (w.content.enemies[i.enemy] ? [moveClass(w.content.enemies[i.enemy]!.tags)] : [])));
+    return MOVE_CLASSES.filter((c) => classes.has(c)).map((kind) => ({ base: e.base, kind, points: navRoute(nav, kind, e.at, goal).map((p) => ({ x: p.x, y: p.y })) }));
+  });
+}
+
+export const TERRAIN_LABEL: Record<TerrainKind, string> = { water: 'вода', mountain: 'горы', ridge: 'хребет' };
+const BLOCK_TEXT: Record<MoveClass, string> = { ground: 'наземным', air: 'воздушным' };
+
+/** Строка легенды преград: вид рельефа и кому он закрыт. */
+export interface TerrainNote {
+  kind: TerrainKind;
+  name: string;
+  text: string;
+}
+
+/** Легенда преград миссии: только те виды, что есть на её карте; кому закрыт путь — из таблицы sim. */
+export function terrainLegend(mission: MissionConfig): TerrainNote[] {
+  const present = new Set(terrainCells(mission).map((c) => c.kind));
+  return (Object.keys(TERRAIN_BLOCKS) as TerrainKind[])
+    .filter((k) => present.has(k))
+    .map((kind) => {
+      const blocked = TERRAIN_BLOCKS[kind];
+      const everyone = MOVE_CLASSES.every((c) => blocked.includes(c));
+      return { kind, name: TERRAIN_LABEL[kind], text: everyone ? 'не пройти никому' : `не пройти ${blocked.map((c) => BLOCK_TEXT[c]).join(' и ')}` };
+    });
 }

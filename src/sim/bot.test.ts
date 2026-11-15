@@ -36,7 +36,7 @@ describe('бот: куда ставить зону', () => {
 
   test('враг, по которому группа не стреляет, и далёкий враг зону не сдвигают', () => {
     expect(zoneOf(simWith('f16', [['tank', west]]))).toEqual(target);
-    expect(zoneOf(simWith('a10', [['tank', { x: 0, y: 0 }]]))).not.toEqual(target);
+    expect(zoneOf(simWith('a10', [['tank', { x: target.x, y: 0 }]]))).not.toEqual(target);
     expect(zoneOf(simWith('a10', [['drone', west]]))).toEqual(target);
     const far = simWith('a10', [['tank', { x: target.x + 7.6, y: target.y }]]);
     expect(zoneOf(far)).toEqual(target);

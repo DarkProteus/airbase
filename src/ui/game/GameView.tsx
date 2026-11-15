@@ -4,7 +4,8 @@ import { createScene } from '../../render';
 import { useGameStore } from '../../store/game';
 import { startGame } from './driver';
 import { GroupPanel } from './GroupPanel';
-import { baseMarks, baseUpgradeNotice, waveWarning } from './markup';
+import { baseMarks, baseUpgradeNotice, terrainLegend, warningRoutes, waveWarning } from './markup';
+import { TERRAIN_COLORS } from '../../render';
 import { WaveWarning } from './WaveWarning';
 import { groupRows, recallCommand, REJECT_TEXT, rejectionNotice, world, zoneClick } from './selectors';
 import type { LineupEntry, MissionConfig, SimState } from '../../sim';
@@ -43,6 +44,7 @@ export function GameView({ mission, lineup, seed }: { mission: MissionConfig; li
       scene.update(first);
       scene.setBases(baseMarks(mission, first));
       scene.setWarning(warningPoints(mission, first));
+      scene.setRoutes(warningRoutes(world(mission, CONTENT, first)));
     }
     scene.setSelectedGroup(useGameStore.getState().selectedGroup);
     const unsub = useGameStore.subscribe((s, prev) => {
@@ -51,6 +53,7 @@ export function GameView({ mission, lineup, seed }: { mission: MissionConfig; li
       scene.update(s.snapshot);
       scene.setBases(baseMarks(mission, s.snapshot));
       scene.setWarning(warningPoints(mission, s.snapshot));
+      scene.setRoutes(warningRoutes(world(mission, CONTENT, s.snapshot)));
       const text = rejectionNotice(s.snapshot.events) ?? baseUpgradeNotice(mission, CONTENT, s.snapshot.events);
       if (text) setNotice(text);
     });
@@ -73,10 +76,26 @@ export function GameView({ mission, lineup, seed }: { mission: MissionConfig; li
 
   const store = useGameStore.getState;
   const warning = snapshot && waveWarning(world(mission, CONTENT, snapshot));
+  const legend = terrainLegend(mission);
   return (
     <>
       <div ref={host} className="game-view" />
       {warning && <WaveWarning warning={warning} />}
+      {legend.length > 0 && (
+        <div className="terrain-legend panel" data-testid="terrain-legend">
+          {legend.map((n) => (
+            <span key={n.kind} className="terrain-note">
+              <i className="terrain-swatch" style={{ background: TERRAIN_COLORS[n.kind] }} />
+              {n.name} — {n.text}
+            </span>
+          ))}
+          <span className="terrain-note terrain-routes">
+            <i className="terrain-dot is-air" />
+            <i className="terrain-dot is-ground" />
+            точки — маршруты ближайшей волны
+          </span>
+        </div>
+      )}
       {snapshot && (
         <GroupPanel
           rows={groupRows(world(mission, CONTENT, snapshot))}

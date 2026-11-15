@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { baseTypes, createSim, inMap, onMapEdge, profileLineup, snapshot, step, TICK_RATE, zoneRejection } from '../sim';
-import type { MissionConfig } from '../sim';
+import { baseTypes, createSim, inMap, moveClass, navRoute, onMapEdge, profileLineup, snapshot, step, terrainCells, terrainNav, terrainProblems, TICK_RATE, zoneRejection } from '../sim';
+import type { MissionConfig, MoveClass, TerrainKind, Vec2 } from '../sim';
 import { CONTENT, DEFAULT_LINEUP, DEFAULT_ZONES, ENEMIES, GROUPS, LINEUP_SIZE, MISSIONS } from '.';
 
 test.each(Object.values(MISSIONS))('аэродром миссии $id лежит на краю карты', (m) => {
@@ -208,5 +208,89 @@ describe('стартовые зоны патруля', () => {
       expect(sameCells(z, m.airfield), m.id).toBe(false);
       for (const s of m.bases!.map((b) => b.pos)) expect(sameCells(z, s), m.id).toBe(false);
     }
+  });
+});
+
+describe('рельеф-преграда', () => {
+  const all = Object.values(MISSIONS);
+  const withTerrain = all.filter((m) => terrainCells(m).length);
+  /** Точки, к которым идут враги: объект или вершины маршрута колонны. */
+  const targets = (m: MissionConfig): Vec2[] => (m.objective!.type === 'escort' ? m.objective!.route : [m.objective!.pos]);
+  /** Классы движения врагов базы — по тегам из конфигов. */
+  const classes = (m: MissionConfig, base: number): MoveClass[] => [...new Set(m.bases![base]!.roster.map((r) => moveClass(ENEMIES[r.enemy]!.tags)))];
+  const angle = (a: Vec2, b: Vec2) => {
+    const d = Math.abs(Math.atan2(a.y, a.x) - Math.atan2(b.y, b.x));
+    return (Math.min(d, 2 * Math.PI - d) * 180) / Math.PI;
+  };
+  /** Наибольший разворот подхода: угол между прямой «база → цель» и последним отрезком маршрута в обход преград. */
+  const bend = (m: MissionConfig): number =>
+    Math.max(
+      0,
+      ...m.bases!.flatMap((b, i) =>
+        classes(m, i).flatMap((cls) =>
+          targets(m).map((t) => {
+            const route = navRoute(terrainNav(m), cls, b.pos, t);
+            const from = route.at(-2)!;
+            return route.length > 2 ? angle({ x: from.x - t.x, y: from.y - t.y }, { x: b.pos.x - t.x, y: b.pos.y - t.y }) : 0;
+          }),
+        ),
+      ),
+    );
+
+  test.each(all)('$id: рельеф не отрезает базы и маршрут от цели', (m) => {
+    expect(terrainProblems(m, CONTENT)).toEqual([]);
+  });
+
+  test('миссия, где преграды отрезают базу врага от цели, отвергается', () => {
+    const bastion = MISSIONS.bastion!;
+    const o = bastion.objective!;
+    const at = o.type === 'defend' ? o.pos : o.route[0]!;
+    // Сплошное кольцо хребта вокруг объекта: ни наземным, ни воздушным не пройти.
+    const ring = (ch: string) => bastion.terrain!.map((row, y) => [...row].map((c, x) => (Math.max(Math.abs(x - at.x), Math.abs(y - at.y)) === 2 ? ch : c)).join(''));
+    const sealed: MissionConfig = { ...bastion, terrain: ring('#') };
+    const flaws = terrainProblems(sealed, CONTENT);
+    expect(flaws.length).toBe(bastion.bases!.reduce((n, _, i) => n + classes(bastion, i).length, 0));
+    for (const f of flaws) expect(f).toMatch(/is cut off from the objective/);
+    expect(() => createSim(sealed, CONTENT, 1)).toThrow(/bad terrain/);
+    // Кольцо гор отрезает только наземных: воздушные базы остаются в порядке.
+    const ground = terrainProblems({ ...bastion, terrain: ring('^') }, CONTENT);
+    expect(ground.length).toBeGreaterThan(0);
+    for (const f of ground) expect(f).toMatch(/for ground enemies/);
+  });
+
+  test('миссия, где преграда перекрывает маршрут колонны, отвергается', () => {
+    const river = MISSIONS.river!;
+    const o = river.objective!;
+    const mid = o.type === 'escort' ? o.route[Math.floor(o.route.length / 2)]! : o.pos;
+    const cut: MissionConfig = { ...river, terrain: river.terrain!.map((row, y) => (y === mid.y ? row.slice(0, mid.x) + '~' + row.slice(mid.x + 1) : row)) };
+    expect(terrainProblems(cut, CONTENT).some((f) => /route crosses water/.test(f))).toBe(true);
+    expect(() => createSim(cut, CONTENT, 1)).toThrow(/bad terrain/);
+  });
+
+  test('рельеф есть минимум в трёх миссиях, и в каждой он уводит хотя бы один маршрут с прямой', () => {
+    expect(withTerrain.length).toBeGreaterThanOrEqual(3);
+    for (const m of withTerrain) expect(bend(m), m.id).toBeGreaterThan(0);
+  });
+
+  test('минимум в трёх миссиях проход меняет выгодное место зоны: враги подходят к цели с другой стороны (разворот от 20°)', () => {
+    const turned = withTerrain.filter((m) => bend(m) >= 20);
+    expect(turned.length, turned.map((m) => m.id).join()).toBeGreaterThanOrEqual(3);
+  });
+
+  test('встречаются все виды преград, и у воздушных врагов есть свои — хребты', () => {
+    const kinds = new Set<TerrainKind>(withTerrain.flatMap((m) => terrainCells(m).map((c) => c.kind)));
+    expect([...kinds].sort()).toEqual(['mountain', 'ridge', 'water']);
+    // Миссия только с воздушными врагами получает хребты, иначе рельеф в ней ничего не решает.
+    for (const m of withTerrain) {
+      const air = m.bases!.every((_, i) => classes(m, i).every((c) => c === 'air'));
+      if (air) expect(terrainCells(m).every((c) => c.kind === 'ridge'), m.id).toBe(true);
+    }
+  });
+
+  test.each(withTerrain)('$id: клетки вокруг аэродрома и клетки баз свободны от преград', (m) => {
+    const cells = terrainCells(m);
+    const near = (p: Vec2, r: number) => cells.some((c) => Math.max(Math.abs(c.x - p.x), Math.abs(c.y - p.y)) <= r);
+    expect(near(m.airfield, 1)).toBe(false);
+    for (const b of m.bases!) expect(near(b.pos, 0), b.id).toBe(false);
   });
 });

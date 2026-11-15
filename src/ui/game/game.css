@@ -152,3 +152,22 @@
 .tutorial-actions { display: flex; justify-content: space-between; }
 .tutorial-actions .btn { padding: 3px 12px; }
 .group-spec { color: var(--accent); font-weight: 400; }
+
+/* Легенда преград рельефа: справа внизу, напротив предупреждения о волне. */
+.terrain-legend {
+  position: absolute;
+  right: var(--sp-3);
+  bottom: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.terrain-note { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.terrain-swatch { width: 12px; height: 12px; border-radius: 2px; border: 1px solid rgb(255 255 255 / 0.25); }
+.terrain-dot { width: 7px; height: 7px; border-radius: 50%; }
+.terrain-dot.is-air { background: #6ec1ff; }
+.terrain-dot.is-ground { background: #e0a458; margin-left: -2px; }

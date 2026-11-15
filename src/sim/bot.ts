@@ -1,6 +1,7 @@
 import { createSim, step, TICK_RATE, type Command, type Sim } from './engine';
 import { createObjective } from './objective';
 import { groupStats, weaponHits, type GroupState } from './sortie';
+import { moveClass, navRoute } from './terrain';
 import type { Content, MissionConfig, Vec2 } from './types';
 
 export interface MatchResult {
@@ -27,9 +28,22 @@ const LEAN = 0.6;
 /** Бот учитывает врагов не дальше стольких радиусов зоны от цели миссии: дальние ещё не угроза. */
 const APPROACH = 3;
 
+/** Точка маршрута на расстоянии `back` по пути от его конца (цели); маршрут короче — его начало. */
+function approachPoint(route: readonly Vec2[], back: number): Vec2 {
+  for (let i = route.length - 1; i > 0; i--) {
+    const a = route[i]!;
+    const b = route[i - 1]!;
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len >= back && len > 0) return { x: a.x + ((b.x - a.x) * back) / len, y: a.y + ((b.y - a.y) * back) / len };
+    back -= len;
+  }
+  return route[0]!;
+}
+
 /**
  * Где бот хочет видеть зону группы. Группа поддержки (без оружия) держит зону на цели миссии — аура накрывает подступы.
- * Ударная выносит зону от цели в сторону подходящих врагов, по которым может стрелять: смещение — среднее направлений на них,
+ * Ударная выносит зону от цели в сторону подходящих врагов, по которым может стрелять: смещение — среднее направлений на них
+ * (при рельефе — на точки их маршрутов в обход преград: зона встаёт в проход, а не упирается в гору),
  * поэтому против одной колонны зона уходит ей навстречу (враг дольше идёт под огнём), а при атаке с разных сторон остаётся на цели.
  * Игрок делает то же самое переносом зон.
  */
@@ -44,10 +58,17 @@ export function botZone(sim: Sim, g: GroupState): Vec2 {
   for (const e of sim.state.enemies) {
     const tags = sim.content.enemies[e.type]!.tags;
     if (!weapons.some((w) => weaponHits(w, tags))) continue;
-    const d = Math.hypot(e.pos.x - at.x, e.pos.y - at.y);
+    // Маршрут врага к цели: без преград — прямая, иначе ломаная в обход рельефа.
+    const route = sim.state.objective ? navRoute(sim.nav, moveClass(tags), e.pos, at, e.via) : [e.pos, at];
+    let d = 0;
+    for (let i = 1; i < route.length; i++) d += Math.hypot(route[i]!.x - route[i - 1]!.x, route[i]!.y - route[i - 1]!.y);
     if (d < 1e-6 || d > radius * APPROACH) continue;
-    dx += (e.pos.x - at.x) / d;
-    dy += (e.pos.y - at.y) / d;
+    // Зона выносится туда, откуда враг подойдёт: к точке его маршрута на краю будущей зоны.
+    const from = route.length > 2 ? approachPoint(route, radius * LEAN) : e.pos;
+    const direct = Math.hypot(from.x - at.x, from.y - at.y);
+    if (direct < 1e-6) continue;
+    dx += (from.x - at.x) / direct;
+    dy += (from.y - at.y) / direct;
     n++;
   }
   if (!n) return at;

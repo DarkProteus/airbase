@@ -4,6 +4,7 @@ import { buildPath, pointAt, type PathData } from './path';
 import { rngNext } from './rng';
 import { auraSources, createGroup, enemySpeed, recallGroup, recallRejection, stepGroups, zoneRejection, type GroupState, type LineupEntry } from './sortie';
 import { createStats, type MatchStats } from './tally';
+import { moveClass, navCell, navClear, navWaypoint, terrainNav, terrainProblems, type Nav } from './terrain';
 import type { Content, EnemyBaseConfig, MissionConfig, Vec2 } from './types';
 
 export const TICK_RATE = 30;
@@ -16,10 +17,14 @@ export interface EnemyState {
   wave: number;
   hp: number;
   speed: number;
-  /** Пройденная дистанция: по пути или, в миссии с целью, по прямой к цели. */
+  /** Пройденная дистанция: по пути или, в миссии с целью, по маршруту к цели. */
   dist: number;
   /** Текущая позиция в клетках. */
   pos: Vec2;
+  /** Путевая точка обхода преграды: есть, пока цель закрыта рельефом. */
+  via?: Vec2;
+  /** Клетка цели, для которой выбрана `via`: цель ушла в другую клетку — точка выбирается заново. */
+  viaGoal?: number;
 }
 
 export type SimEvent =
@@ -88,6 +93,8 @@ export interface Sim {
   readonly path?: PathData;
   /** Маршрут подвижной цели (escort). */
   readonly route?: PathData;
+  /** Навигация по рельефу (миссии с целью и преградами); нет — враги идут к цели по прямой. */
+  readonly nav?: Nav;
   /** Расписание спавна по волнам: тик от старта волны, отсортировано; at — точка появления. */
   readonly waveSpawns: readonly (readonly { tick: number; enemy: string; at: Vec2 }[])[];
   state: SimState;
@@ -107,6 +114,8 @@ export function createSim(mission: MissionConfig, content: Content, seed: number
   const { objective } = mission;
   if (!objective && !mission.path) throw new Error(`mission needs a path or an objective: ${mission.id}`);
   const path = objective || !mission.path ? undefined : buildPath(mission.path);
+  const flaws = terrainProblems(mission, content);
+  if (flaws.length) throw new Error(`bad terrain: ${flaws.join('; ')}`);
   const waveSpawns = mission.waves.map((wave, waveIndex) => {
     const spawns: { tick: number; enemy: string; at: Vec2 }[] = [];
     for (const g of wave.groups) {
@@ -126,6 +135,7 @@ export function createSim(mission: MissionConfig, content: Content, seed: number
     content,
     path,
     route: objective && objectiveRoute(objective),
+    nav: objective && terrainNav(mission),
     waveSpawns,
     state: {
       tick: 0,
@@ -245,6 +255,25 @@ export function enemyThreat(sim: Sim, e: EnemyState): number {
   return o ? -Math.hypot(e.pos.x - o.pos.x, e.pos.y - o.pos.y) : e.dist;
 }
 
+/**
+ * Обход рельефа: путевая точка врага, если прямой путь к цели закрыт преградой; undefined — цель видна, идём прямо.
+ * Точка держится, пока враг до неё не дошёл и цель не ушла в другую клетку: так путь пересчитывается за подвижной целью.
+ */
+function detour(nav: Nav, tags: readonly string[], e: EnemyState, goal: Vec2, stepLen: number): Vec2 | undefined {
+  const cls = moveClass(tags);
+  if (navClear(nav, cls, e.pos, goal)) {
+    delete e.via;
+    delete e.viaGoal;
+    return undefined;
+  }
+  const goalCell = navCell(nav, goal);
+  if (!e.via || e.viaGoal !== goalCell || Math.hypot(e.via.x - e.pos.x, e.via.y - e.pos.y) <= stepLen) {
+    e.via = navWaypoint(nav, cls, e.pos, goal);
+    e.viaGoal = goalCell;
+  }
+  return e.via;
+}
+
 /** Текущая волна идёт и все её спавны выполнены. */
 const spawnsDone = (sim: Sim): boolean =>
   sim.state.phase === 'wave' && sim.state.nextSpawn >= (sim.waveSpawns[sim.state.wave - 1]?.length ?? 0);
@@ -297,8 +326,19 @@ export function step(sim: Sim, commands: readonly Command[] = []): void {
       const dy = goal.pos.y - e.pos.y;
       const d = Math.hypot(dx, dy);
       if (d > stepLen + OBJECTIVE_REACH) {
-        e.pos.x += (dx / d) * stepLen;
-        e.pos.y += (dy / d) * stepLen;
+        const via = sim.nav && detour(sim.nav, sim.content.enemies[e.type]!.tags, e, goal.pos, stepLen);
+        if (via) {
+          // Цель закрыта рельефом: шаг к путевой точке обхода, не дальше неё.
+          const vx = via.x - e.pos.x;
+          const vy = via.y - e.pos.y;
+          const vd = Math.hypot(vx, vy);
+          const k = vd > stepLen ? stepLen / vd : 1;
+          e.pos.x += vx * k;
+          e.pos.y += vy * k;
+        } else {
+          e.pos.x += (dx / d) * stepLen;
+          e.pos.y += (dy / d) * stepLen;
+        }
         return true;
       }
     } else {

@@ -10,5 +10,6 @@ export * from './save';
 export * from './sortie';
 export * from './stats';
 export * from './tally';
+export * from './terrain';
 export * from './types';
 export * from './bot';

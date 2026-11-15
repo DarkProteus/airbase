@@ -22,12 +22,12 @@ import {
 import type { MissionConfig, Vec2 } from '../sim';
 import { cellToWorld } from './coords';
 import { groundTint, hillHeight, layoutEnvironment } from './environment';
-import type { DecorItem, Placed } from './environment';
+import type { DecorItem, PeakItem, Placed } from './environment';
 import { buildModel } from './model';
 import { CONVOY_CARS, FUEL, HANGAR, HQ, runwayModel, SPAWN_GATE, TOWER } from './props';
 
 /**
- * Статика карты как three-объекты: земля с пятнами и сеткой, дорога, аэродром, ворота входов, декор и холмы.
+ * Статика карты как three-объекты: земля с пятнами и сеткой, дорога, аэродром, ворота входов, преграды рельефа, декор и холмы.
  * Раскладка берётся из environment.ts (чистые функции от MissionConfig); здесь только сборка мешей.
  * Тени включаются здесь: земля и декор принимают, объекты отбрасывают.
  */
@@ -41,7 +41,19 @@ const COLORS = {
   roadMark: 0xd8d2b0,
   apron: 0x626a74,
   gateLight: 0xff6a3d,
-};
+  water: 0x2f78b8,
+  waterDeep: 0x245f96,
+  mountainBase: 0x6f6248,
+  mountain: [0x7d6b4c, 0x94805a],
+  ridgeBase: 0x5d6168,
+  ridge: [0x767c86, 0x969ca6],
+  snow: 0xf2f5f8,
+} as const;
+
+/** Цвета преград для легенды в интерфейсе (те же, что на карте). */
+export const TERRAIN_COLORS = { water: '#2f78b8', mountain: '#94805a', ridge: '#969ca6' } as const;
+
+const BARRIER_COLORS = { water: [COLORS.waterDeep, COLORS.water], mountain: [COLORS.mountainBase, COLORS.mountainBase], ridge: [COLORS.ridgeBase, COLORS.ridgeBase] } as const;
 
 /** Уровень земли вне карты (карта стоит на невысокой плите над ним). */
 const OUTER_Y = -0.28;
@@ -103,7 +115,7 @@ function place(obj: Object3D, p: Placed | { at: Vec2; heading?: number }, size: 
 
 const dummy = new Object3D();
 
-function instanced(geo: BufferGeometry, items: DecorItem[], colorOf: (it: DecorItem) => Color, pose: (it: DecorItem, o: Object3D) => void): InstancedMesh | undefined {
+function instanced<T>(geo: BufferGeometry, items: T[], colorOf: (it: T) => Color, pose: (it: T, o: Object3D) => void): InstancedMesh | undefined {
   if (!items.length) return undefined;
   const mat = new MeshLambertMaterial({ color: 0xffffff, flatShading: true });
   const mesh = new InstancedMesh(geo, mat, items.length);
@@ -206,7 +218,28 @@ export function buildEnvironment(mission: MissionConfig): Environment {
   const trunkGeo = new CylinderGeometry(0.5, 0.5, 1, 5).translate(0, 0.5, 0);
   const rockGeo = new SphereGeometry(0.5, 5, 4);
   const hillGeo = new SphereGeometry(1, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2);
+  // Преграды: плита на всю клетку (вода — синяя гладь, горы и хребет — камень) и вершины; сетка под плитой не видна.
+  const slabGeo = new BoxGeometry(1, 1, 1);
+  const peakGeo = new ConeGeometry(1, 1, 6).translate(0, 0.5, 0);
+  const { cells, peaks } = layout.terrain;
+  const snowy = peaks.filter((p) => p.snow);
+  const peakColor = (p: PeakItem) => lerpColor(COLORS[p.kind][0], COLORS[p.kind][1], p.tone);
   const parts = [
+    instanced(slabGeo, cells, (c) => lerpColor(BARRIER_COLORS[c.kind][0], BARRIER_COLORS[c.kind][1], groundTint(c) - 0.5), (c, o) => {
+      const thick = c.kind === 'water' ? 0.03 : 0.07;
+      o.position.set(...ground3(c, size, thick / 2 + 0.002));
+      o.scale.set(1, thick, 1);
+    }),
+    instanced(peakGeo, peaks, peakColor, (p, o) => {
+      o.position.set(...ground3(p.at, size, 0.05));
+      o.rotation.y = p.rotation;
+      o.scale.set(p.radius, p.height, p.radius);
+    }),
+    instanced(peakGeo, snowy, () => new Color(COLORS.snow), (p, o) => {
+      o.position.set(...ground3(p.at, size, 0.05 + p.height * 0.62));
+      o.rotation.y = p.rotation;
+      o.scale.set(p.radius * 0.4, p.height * 0.39, p.radius * 0.4);
+    }),
     instanced(crownGeo, trees, (t) => lerpColor(0x2f4d38, 0x41643f, t.tone), (t, o) => {
       o.position.set(...ground3(t.at, size, 0.2 * t.scale));
       o.rotation.y = t.rotation;
@@ -234,7 +267,7 @@ export function buildEnvironment(mission: MissionConfig): Environment {
     dispose: () => {
       for (const o of owned) o.dispose();
       for (const p of parts) p?.dispose();
-      for (const g of [crownGeo, trunkGeo, rockGeo, hillGeo]) g.dispose();
+      for (const g of [crownGeo, trunkGeo, rockGeo, hillGeo, slabGeo, peakGeo]) g.dispose();
     },
   };
 }

@@ -23,7 +23,7 @@ import {
 } from 'three';
 import type { Material, Object3D } from 'three';
 import { visualOf } from '../ui/entity/model';
-import { attackLinks, enemyMarks, targetKind } from '../ui/game/markup';
+import { attackLinks, enemyMarks, TARGET_KINDS, targetKind } from '../ui/game/markup';
 import type { EnemyMark, TargetKind } from '../ui/game/markup';
 import type { PreviewShape } from '../ui/entity/model';
 import { DT, effectiveGroupStats, objectiveRoute, rearmTicksLeft, toTicks } from '../sim';
@@ -32,7 +32,7 @@ import type { Content, MissionConfig, SimState, SortiePhase, Vec2, VisualConfig 
 import { cellToWorld, fitView, ISO_FORWARD, pickCell } from './coords';
 import type { IsoView } from './coords';
 import { buildConvoyCars, buildEnvironment, buildHeadquarters, setShadows } from './environmentScene';
-import { routePose } from './environment';
+import { routeDots, routePose } from './environment';
 import { CONVOY_GAP } from './props';
 import { auraZones, waveLook, wavePhase } from './auras';
 import type { AuraZone } from './auras';
@@ -58,6 +58,8 @@ export interface SceneHandle {
   setWarning(points: readonly { at: Vec2; label: string }[]): void;
   /** Вражеские базы: постоянная подпись и модели типов врагов, которые база уже выпускает. */
   setBases(bases: readonly { at: Vec2; name: string; types: readonly string[] }[]): void;
+  /** Маршруты врагов ближайшей волны: точки вдоль ломаных, цвет — по типу цели (воздух/земля); пустой список — убрать. */
+  setRoutes(routes: readonly { kind: TargetKind; points: readonly Vec2[] }[]): void;
   dispose(): void;
 }
 
@@ -308,6 +310,19 @@ export function createScene(
   dynamic.add(baseProps);
   let baseLabels: { el: HTMLElement; world: Vector3 }[] = [];
   let baseKey = '';
+
+  // Маршруты ближайшей волны: плоские точки на земле, по одному набору на тип цели.
+  const ROUTE_DOTS = 512;
+  const routeGeo = new CircleGeometry(0.085, 10).rotateX(-Math.PI / 2);
+  const routeMeshes = TARGET_KINDS.map((kind) => {
+    const mesh = new InstancedMesh(routeGeo, new MeshBasicMaterial({ color: KIND_COLORS[kind], transparent: true, opacity: 0.85, depthWrite: false }), ROUTE_DOTS);
+    mesh.count = 0;
+    mesh.renderOrder = 1;
+    mesh.frustumCulled = false;
+    dynamic.add(mesh);
+    return { kind, mesh };
+  });
+  let routeKey = '[]';
 
   // Цель миссии (объект или колонна) с полосой прочности; позиция и прочность — из снапшота.
   const HP_W = 1.2;
@@ -850,6 +865,8 @@ export function createScene(
     planeGeo.dispose();
     warnRingGeo.dispose();
     warnMat.dispose();
+    routeGeo.dispose();
+    for (const r of routeMeshes) (r.mesh.material as Material).dispose();
     tracerGeo.dispose();
     burstGeo.dispose();
     fxRingGeo.dispose();
@@ -941,5 +958,26 @@ export function createScene(
     });
   };
 
-  return { update, setSelectedGroup, setWarning, setBases, dispose };
+  const routeDummy = new Object3D();
+  const setRoutes = (routes: readonly { kind: TargetKind; points: readonly Vec2[] }[]) => {
+    const key = JSON.stringify(routes);
+    if (key === routeKey) return;
+    routeKey = key;
+    for (const { kind, mesh } of routeMeshes) {
+      let n = 0;
+      // Воздушный и наземный маршруты одной базы часто совпадают: точки воздушного сдвинуты на полшага.
+      for (const r of routes.filter((x) => x.kind === kind))
+        for (const p of routeDots(r.points, 0.5, kind === 'air' ? 1.05 : 0.8)) {
+          if (n >= ROUTE_DOTS) break;
+          const w = cellToWorld(p, size, 0.1);
+          routeDummy.position.set(w.x, w.y, w.z);
+          routeDummy.updateMatrix();
+          mesh.setMatrixAt(n++, routeDummy.matrix);
+        }
+      mesh.count = n;
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+  };
+
+  return { update, setSelectedGroup, setWarning, setBases, setRoutes, dispose };
 }
