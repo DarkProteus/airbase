@@ -26,16 +26,20 @@ import { visualOf } from '../ui/entity/model';
 import { attackLinks, enemyMarks, targetKind } from '../ui/game/markup';
 import type { EnemyMark, TargetKind } from '../ui/game/markup';
 import type { PreviewShape } from '../ui/entity/model';
-import { DT, effectiveGroupStats, objectiveRoute } from '../sim';
+import { DT, effectiveGroupStats, objectiveRoute, rearmTicksLeft, toTicks } from '../sim';
 import type { PathData } from '../sim';
-import type { Content, MissionConfig, SimState, Vec2, VisualConfig } from '../sim';
+import type { Content, MissionConfig, SimState, SortiePhase, Vec2, VisualConfig } from '../sim';
 import { cellToWorld, fitView, ISO_FORWARD, pickCell } from './coords';
 import type { IsoView } from './coords';
 import { buildConvoyCars, buildEnvironment, buildHeadquarters, setShadows } from './environmentScene';
 import { routePose } from './environment';
 import { CONVOY_GAP } from './props';
-import { dyingScale, effectProgress, EFFECT_COLORS, planEffects, recoilScale } from './effects';
+import { auraZones, waveLook, wavePhase } from './auras';
+import type { AuraZone } from './auras';
+import { blastSize, debrisAt, dyingScale, effectProgress, EFFECT_COLORS, missilePath, planEffects, recoilScale, shotKindOf, shotWeapon, trimEffects } from './effects';
 import type { EffectSpec, Vec3 } from './effects';
+import { groupPose, initialTrack, nextTrack, runwayFrame } from './flight';
+import type { FlightTrack } from './flight';
 import { buildModel } from './model';
 import { headingOf, retarget, turnToward, tweenDuration, tweenValue } from './motion';
 import type { Tween } from './motion';
@@ -175,6 +179,11 @@ export function createScene(
     y: Tween;
     /** Полоска здоровья + метка типа цели (плашка к камере). */
     bar: Bar;
+    /** Теги конфига (какое оружие бьёт эту цель) и габарит взрыва (из прочности и масштаба). */
+    tags: readonly string[];
+    blast: number;
+    /** Момент последнего попадания — для встряски. */
+    hitStart: number;
   }
   interface Bar {
     root: Group;
@@ -187,6 +196,17 @@ export function createScene(
     scale: number;
     start: number;
   }
+  type FxPool = 'tracer' | 'sphere' | 'ring' | 'box';
+  /** Объект эффекта из пула: меш с собственным материалом, переиспользуется. */
+  interface Fx {
+    obj: Mesh;
+    mat: MeshBasicMaterial;
+  }
+  interface AuraEntry {
+    zone: AuraZone;
+    waves: { mesh: Mesh; mat: MeshBasicMaterial }[];
+    disc: { mesh: Mesh; mat: MeshBasicMaterial };
+  }
   interface GroupEntry {
     mesh: Object3D;
     heading: number;
@@ -194,11 +214,19 @@ export function createScene(
     scale: number;
     /** Момент последнего выстрела — для импульса отдачи. */
     recoilStart: number;
-    /** Высота полёта над землёй; на аэродроме (взлёт, перезарядка) — на земле. */
+    /** Высота полёта над землёй (эшелон). */
     lift: number;
+    /** Тип группы (ключ конфига) и фаза вылета в прошлом снапшоте. */
+    type: string;
+    phase: SortiePhase;
+    /** Показанная клетка и доля эшелона 0..1 (0 — на земле): траектория по полосе, см. flight.ts. */
     x: Tween;
     y: Tween;
-    onGround: boolean;
+    h: Tween;
+    track: FlightTrack;
+    /** Клетка в прошлом кадре — курс берётся из фактического смещения. */
+    px?: number;
+    py?: number;
     zone: Mesh;
     zoneRing: Mesh;
     zoneMat: MeshBasicMaterial;
@@ -210,7 +238,7 @@ export function createScene(
   let selectedGroup: number | null = null;
   const enemies = new Map<number, EnemyEntry>();
   const dying: Dying[] = [];
-  const live: { spec: EffectSpec; obj: Mesh; mat: MeshBasicMaterial; start: number }[] = [];
+  const live: { spec: EffectSpec; fx: Fx; pool: FxPool; start: number }[] = [];
   const dynamic = new Group();
   scene.add(dynamic);
   const baseWorld = last ? cellToWorld(last, size, 0.4) : undefined;
@@ -315,13 +343,23 @@ export function createScene(
     (goal.fill.material as MeshBasicMaterial).color.set(goal.ratio > 0.35 ? COLORS.hpFull : COLORS.hpLow);
   };
   const clock = () => performance.now();
-  const DYING_MS = 320;
+  const DYING_MS = 220;
   const RECOIL_MS = 140;
+  const HIT_MS = 120;
+  /** Сколько эффектов живёт одновременно; сверх — отбрасываются дым и осколки (см. trimEffects). */
+  const MAX_EFFECTS = 160;
 
-  // Эффекты: общие единичные геометрии, материал на эффект (гаснет по прозрачности) — освобождается по окончании.
+  // Эффекты: общие единичные геометрии и пул мешей с материалами — по окончании эффект не удаляется, а прячется и ждёт повторного использования.
   const tracerGeo = new CylinderGeometry(0.06, 0.06, 1, 6);
   const burstGeo = new SphereGeometry(1, 12, 8);
+  const fxRingGeo = new RingGeometry(0.8, 1, 32).rotateX(-Math.PI / 2);
+  const fxBoxGeo = new BoxGeometry(1, 1, 1);
+  const fxGeo: Record<FxPool, BufferGeometry> = { tracer: tracerGeo, sphere: burstGeo, ring: fxRingGeo, box: fxBoxGeo };
+  const fxFree: Record<FxPool, Fx[]> = { tracer: [], sphere: [], ring: [], box: [] };
+  const poolOf = (kind: EffectSpec['kind']): FxPool =>
+    kind === 'tracer' || kind === 'missile' ? 'tracer' : kind === 'ring' ? 'ring' : kind === 'debris' ? 'box' : 'sphere';
   const UP = new Vector3(0, 1, 0);
+  const tmpDir = new Vector3();
 
   const enemyWorld = (e: EnemyEntry, now: number): Vec3 =>
     cellToWorld({ x: tweenValue(e.x, now), y: tweenValue(e.y, now) }, size, e.lift);
@@ -330,8 +368,14 @@ export function createScene(
   const zoneDiscGeo = new CircleGeometry(1, 48).rotateX(-Math.PI / 2);
   const zoneRingGeo = new RingGeometry(0.94, 1, 64).rotateX(-Math.PI / 2);
   const ZONE_Y = 0.1;
+  const AURA_Y = 0.13;
+  // Круг ауры: две бегущие волны и мягкое пульсирующее заполнение, цвет — владельца (чуть светлее его зоны).
+  const waveGeo = new RingGeometry(0.86, 1, 64).rotateX(-Math.PI / 2);
+  const auraMeshes = new Map<string, AuraEntry>();
+  const runway = runwayFrame(mission);
+  const GROUND_Y = 0.08;
   const groupWorld = (g: GroupEntry, now: number): Vec3 =>
-    cellToWorld({ x: tweenValue(g.x, now), y: tweenValue(g.y, now) }, size, g.onGround ? 0.08 : g.lift);
+    cellToWorld({ x: tweenValue(g.x, now), y: tweenValue(g.y, now) }, size, GROUND_Y + (Math.max(g.lift, GROUND_Y) - GROUND_Y) * tweenValue(g.h, now));
   const paintZone = (g: GroupEntry, selected: boolean) => {
     const c = selected ? COLORS.zoneSelected : g.zoneColor;
     g.zoneMat.color.set(c);
@@ -342,7 +386,7 @@ export function createScene(
 
   /** Единичный цилиндр -> луч от from до to; thick — множитель толщины. */
   const aim = (obj: Mesh, from: Vec3, to: Vec3, thick = 1) => {
-    const dir = new Vector3(to.x - from.x, to.y - from.y, to.z - from.z);
+    const dir = tmpDir.set(to.x - from.x, to.y - from.y, to.z - from.z);
     const len = dir.length();
     obj.position.set((from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2);
     if (len > 1e-6) obj.quaternion.setFromUnitVectors(UP, dir.divideScalar(len));
@@ -350,15 +394,74 @@ export function createScene(
   };
 
   const spawnEffect = (spec: EffectSpec, now: number) => {
-    const mat = new MeshBasicMaterial({ color: spec.color, transparent: true, depthWrite: false });
-    const obj = new Mesh(spec.kind === 'tracer' ? tracerGeo : burstGeo, mat);
-    if (spec.kind === 'tracer') {
-      aim(obj, spec.from, spec.to);
-    } else {
-      obj.position.set(spec.at.x, spec.at.y, spec.at.z);
+    const pool = poolOf(spec.kind);
+    let fx = fxFree[pool].pop();
+    if (!fx) {
+      const mat = new MeshBasicMaterial({ transparent: true, depthWrite: false });
+      const obj = new Mesh(fxGeo[pool], mat);
+      obj.renderOrder = 4;
+      obj.frustumCulled = false;
+      dynamic.add(obj);
+      fx = { obj, mat };
     }
-    dynamic.add(obj);
-    live.push({ spec, obj, mat, start: now });
+    fx.mat.color.set(spec.color);
+    fx.mat.opacity = 0;
+    fx.obj.visible = false;
+    fx.obj.rotation.set(0, 0, 0);
+    fx.obj.quaternion.identity();
+    live.push({ spec, fx, pool, start: now + (spec.delay ?? 0) });
+  };
+
+  /** Один кадр эффекта: положение, размер и прозрачность по доле жизни k. */
+  const paintEffect = (spec: EffectSpec, fx: Fx, k: number, ageMs: number) => {
+    const { obj, mat } = fx;
+    switch (spec.kind) {
+      case 'tracer': {
+        // Короткий яркий штрих бежит от группы к цели.
+        const d = Math.hypot(spec.to.x - spec.from.x, spec.to.y - spec.from.y, spec.to.z - spec.from.z) || 1;
+        const head = Math.min(1, k * 1.15);
+        const tail = Math.max(0, head - 0.7 / d);
+        aim(
+          obj,
+          { x: spec.from.x + (spec.to.x - spec.from.x) * tail, y: spec.from.y + (spec.to.y - spec.from.y) * tail, z: spec.from.z + (spec.to.z - spec.from.z) * tail },
+          { x: spec.from.x + (spec.to.x - spec.from.x) * head, y: spec.from.y + (spec.to.y - spec.from.y) * head, z: spec.from.z + (spec.to.z - spec.from.z) * head },
+          2.2,
+        );
+        mat.opacity = k < 0.85 ? 1 : (1 - k) / 0.15;
+        break;
+      }
+      case 'missile': {
+        const f = missilePath(k);
+        const f0 = Math.max(0, f - 0.35 / (Math.hypot(spec.to.x - spec.from.x, spec.to.y - spec.from.y, spec.to.z - spec.from.z) || 1));
+        const at = (t: number): Vec3 => ({ x: spec.from.x + (spec.to.x - spec.from.x) * t, y: spec.from.y + (spec.to.y - spec.from.y) * t, z: spec.from.z + (spec.to.z - spec.from.z) * t });
+        aim(obj, at(f0), at(f), 2.4);
+        mat.opacity = 1;
+        break;
+      }
+      case 'burst':
+        obj.position.set(spec.at.x, spec.at.y, spec.at.z);
+        obj.scale.setScalar(spec.radius * (0.3 + 0.7 * Math.sqrt(k)));
+        mat.opacity = 0.95 * (1 - k) ** 1.2;
+        break;
+      case 'ring':
+        obj.position.set(spec.at.x, spec.at.y, spec.at.z);
+        obj.scale.set(spec.radius * (0.2 + 0.8 * Math.sqrt(k)), 1, spec.radius * (0.2 + 0.8 * Math.sqrt(k)));
+        mat.opacity = 0.8 * (1 - k);
+        break;
+      case 'smoke':
+        obj.position.set(spec.at.x, spec.at.y + 0.35 * k, spec.at.z);
+        obj.scale.setScalar(spec.radius * (0.6 + 0.9 * k));
+        mat.opacity = 0.55 * (1 - k) ** 1.5;
+        break;
+      case 'debris': {
+        const p = debrisAt(spec.at, spec.vel, ageMs / 1000);
+        obj.position.set(p.x, Math.max(0.02, p.y), p.z);
+        obj.scale.setScalar(spec.size);
+        obj.rotation.set(ageMs * 0.011, ageMs * 0.007, 0);
+        mat.opacity = k < 0.7 ? 1 : (1 - k) / 0.3;
+        break;
+      }
+    }
   };
 
   /** Анимации по времени: движение врагов и групп, отдача групп при выстреле, гибель, эффекты. */
@@ -372,6 +475,8 @@ export function createScene(
       const p = enemyWorld(e, now);
       e.mesh.position.set(p.x, p.y, p.z);
       e.mesh.rotation.y = e.heading = turnToward(e.heading, e.headingTo, turn);
+      const hk = effectProgress(e.hitStart, HIT_MS, now);
+      e.mesh.scale.setScalar(e.scale * (hk === null ? 1 : recoilScale(hk)));
       e.bar.root.position.set(p.x, p.y + 0.8 * e.scale + 0.3, p.z);
     }
     for (const l of linkSpecs) {
@@ -389,6 +494,12 @@ export function createScene(
     for (const g of groups.values()) {
       const p = groupWorld(g, now);
       g.mesh.position.set(p.x, p.y, p.z);
+      // Курс — по фактическому смещению (разбег, руление, заход), на месте держится прежний.
+      const cx = tweenValue(g.x, now);
+      const cy = tweenValue(g.y, now);
+      if (g.px !== undefined && g.py !== undefined) g.headingTo = headingOf(cx - g.px, cy - g.py) ?? g.headingTo;
+      g.px = cx;
+      g.py = cy;
       g.mesh.rotation.y = g.heading = turnToward(g.heading, g.headingTo, turn);
       const k = effectProgress(g.recoilStart, RECOIL_MS, now);
       g.mesh.scale.setScalar(g.scale * (k === null ? 1 : recoilScale(k)));
@@ -405,13 +516,25 @@ export function createScene(
       const f = live[i]!;
       const k = effectProgress(f.start, f.spec.ttl, now);
       if (k === null) {
-        dynamic.remove(f.obj);
-        f.mat.dispose();
+        f.fx.obj.visible = false;
+        fxFree[f.pool].push(f.fx);
         live.splice(i, 1);
-      } else if (f.spec.kind === 'burst') {
-        f.obj.scale.setScalar(f.spec.radius * (0.35 + 0.65 * k));
-        f.mat.opacity = 0.9 * (1 - k);
-      } else f.mat.opacity = 1 - k;
+      } else if (now < f.start) f.fx.obj.visible = false;
+      else {
+        f.fx.obj.visible = true;
+        paintEffect(f.spec, f.fx, k, now - f.start);
+      }
+    }
+    // Ауры: волны бегут по зоне, пока владелец патрулирует.
+    for (const a of auraMeshes.values()) {
+      const r = a.zone.radius;
+      a.waves.forEach((w, i) => {
+        const look = waveLook(wavePhase(now, i * 0.5), a.zone.flow);
+        w.mesh.scale.set(r * look.scale, 1, r * look.scale);
+        w.mat.opacity = look.opacity;
+      });
+      a.disc.mesh.scale.set(r, 1, r);
+      a.disc.mat.opacity = 0.05 + 0.05 * (0.5 + 0.5 * Math.sin(now / 450));
     }
   };
 
@@ -472,7 +595,19 @@ export function createScene(
         // Курс при появлении: к цели миссии (или к базе), дальше — по фактическому движению.
         const to = state.objective?.pos ?? last ?? e.pos;
         const heading = headingOf(to.x - e.pos.x, to.y - e.pos.y) ?? 0;
-        entry = { mesh, lift, scale, bar, heading, headingTo: heading, x: retarget(undefined, e.pos.x, now, 0), y: retarget(undefined, e.pos.y, now, 0) };
+        entry = {
+          mesh,
+          lift,
+          scale,
+          bar,
+          tags: cfg?.tags ?? [e.type],
+          blast: blastSize(cfg?.hp ?? 30, scale),
+          hitStart: -1e9,
+          heading,
+          headingTo: heading,
+          x: retarget(undefined, e.pos.x, now, 0),
+          y: retarget(undefined, e.pos.y, now, 0),
+        };
         enemies.set(e.id, entry);
       } else if (isNew) {
         entry.x = retarget(entry.x, e.pos.x, now, duration);
@@ -499,8 +634,20 @@ export function createScene(
       const cfg = content.groups[g.type];
       if (!cfg) continue;
       if (cfg.visual) groupColors.set(g.id, new Color(cfg.visual.color).getHex());
-      const onGround = g.phase === 'takeoff' || g.phase === 'rearm';
       let entry = groups.get(g.id);
+      // Траектория у аэродрома: поза считается на каждый новый снапшот, между ними рендер плавно доезжает твином.
+      const pose = (track: FlightTrack) =>
+        groupPose(runway, {
+          phase: g.phase,
+          phaseTick: g.phaseTick,
+          pos: g.pos,
+          zone: g.zone,
+          takeoffTicks: Math.max(1, toTicks(cfg.takeoffTime)),
+          rearmTicks: Math.max(1, g.phaseTick + rearmTicksLeft({ content }, g)),
+          slot: state.groups.indexOf(g),
+          slots: state.groups.length,
+          track,
+        });
       if (!entry) {
         const { mesh, lift, scale } = bodyMesh({ role: cfg.role, tags: cfg.tags, visual: cfg.visual });
         const zoneColor = new Color(cfg.visual?.color ?? '#ffffff');
@@ -510,16 +657,21 @@ export function createScene(
         const zoneRing = new Mesh(zoneRingGeo, ringMat);
         zone.renderOrder = zoneRing.renderOrder = 1;
         dynamic.add(mesh, zone, zoneRing);
+        const track = nextTrack(runway, initialTrack(), undefined, g);
+        const p0 = pose(track);
         entry = {
           mesh,
           scale,
-          heading: 0,
-          headingTo: 0,
+          heading: runway.heading,
+          headingTo: runway.heading,
           recoilStart: -1e9,
           lift,
-          x: retarget(undefined, g.pos.x, now, 0),
-          y: retarget(undefined, g.pos.y, now, 0),
-          onGround,
+          type: g.type,
+          phase: g.phase,
+          x: retarget(undefined, p0.at.x, now, 0),
+          y: retarget(undefined, p0.at.y, now, 0),
+          h: retarget(undefined, p0.lift, now, 0),
+          track,
           zone,
           zoneRing,
           zoneMat,
@@ -529,10 +681,12 @@ export function createScene(
         groups.set(g.id, entry);
         paintZone(entry, selectedGroup === g.id);
       } else if (isNew) {
-        entry.x = retarget(entry.x, g.pos.x, now, duration);
-        entry.y = retarget(entry.y, g.pos.y, now, duration);
-        entry.headingTo = headingOf(entry.x.to - entry.x.from, entry.y.to - entry.y.from) ?? entry.headingTo;
-        entry.onGround = onGround;
+        entry.track = nextTrack(runway, entry.track, entry.phase, g);
+        const p = pose(entry.track);
+        entry.phase = g.phase;
+        entry.x = retarget(entry.x, p.at.x, now, duration);
+        entry.y = retarget(entry.y, p.at.y, now, duration);
+        entry.h = retarget(entry.h, p.lift, now, duration);
       }
       // Радиус с аурами союзников (например, ДРЛО) — тот же расчёт, что в sim.
       const radius = effectiveGroupStats({ content, state }, g).zoneRadius;
@@ -556,11 +710,22 @@ export function createScene(
         },
         basePos: goalWorld(now) ?? baseWorld ?? { x: 0, y: 0, z: 0 },
         groupColor: (id) => groupColors.get(id),
+        shotKind: (group, enemy, damage) => {
+          const g = groups.get(group);
+          const e = enemies.get(enemy);
+          const weapon = g && e && shotWeapon(content.groups[g.type]?.weapons ?? [], e.tags, damage);
+          return weapon ? shotKindOf(weapon) : undefined;
+        },
+        enemySize: (id) => enemies.get(id)?.blast,
       });
-      for (const spec of plan.effects) spawnEffect(spec, now);
+      for (const spec of trimEffects(plan.effects, MAX_EFFECTS - live.length)) spawnEffect(spec, now);
       for (const id of plan.fired) {
         const g = groups.get(id);
         if (g) g.recoilStart = now;
+      }
+      for (const id of plan.hit) {
+        const e = enemies.get(id);
+        if (e) e.hitStart = now;
       }
       for (const id of plan.killed) {
         const e = enemies.get(id);
@@ -596,6 +761,38 @@ export function createScene(
       link.mat.color.copy(l.color);
     }
 
+    // Зоны аур: круги появляются, пока владелец патрулирует, и исчезают вместе с его патрулём.
+    const zones = new Map(auraZones({ content, state }).map((z) => [z.key, z]));
+    for (const [key, a] of auraMeshes)
+      if (!zones.has(key)) {
+        dynamic.remove(a.disc.mesh, ...a.waves.map((w) => w.mesh));
+        a.disc.mat.dispose();
+        for (const w of a.waves) w.mat.dispose();
+        auraMeshes.delete(key);
+      }
+    for (const [key, z] of zones) {
+      let a = auraMeshes.get(key);
+      if (!a) {
+        const color = new Color(groupColors.get(z.group) ?? 0xffffff).lerp(new Color(0xffffff), 0.35);
+        const make = (geo: BufferGeometry) => {
+          const mat = new MeshBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false });
+          const mesh = new Mesh(geo, mat);
+          mesh.renderOrder = 2;
+          const w = cellToWorld(z.at, size, AURA_Y);
+          mesh.position.set(w.x, w.y, w.z);
+          dynamic.add(mesh);
+          return { mesh, mat };
+        };
+        a = { zone: z, waves: [make(waveGeo), make(waveGeo)], disc: make(zoneDiscGeo) };
+        auraMeshes.set(key, a);
+      } else {
+        a.zone = z;
+        // Зону могли перенести: круг следует за центром.
+        const w = cellToWorld(z.at, size, AURA_Y);
+        for (const m of [a.disc, ...a.waves]) m.mesh.position.set(w.x, w.y, w.z);
+      }
+    }
+
     for (const [id, entry] of enemies)
       if (!seenEnemies.has(id)) {
         dynamic.remove(entry.mesh);
@@ -624,7 +821,6 @@ export function createScene(
 
   const dispose = () => {
     cancelAnimationFrame(raf);
-    for (const f of live) f.mat.dispose();
     live.length = 0;
     ro.disconnect();
     el.removeEventListener('pointerup', onClick);
@@ -643,6 +839,9 @@ export function createScene(
     warnMat.dispose();
     tracerGeo.dispose();
     burstGeo.dispose();
+    fxRingGeo.dispose();
+    fxBoxGeo.dispose();
+    waveGeo.dispose();
     zoneDiscGeo.dispose();
     zoneRingGeo.dispose();
     for (const g of geoCache.values()) g.dispose();
