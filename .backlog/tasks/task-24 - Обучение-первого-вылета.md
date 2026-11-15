@@ -13,7 +13,7 @@ dependencies:
   - TASK-22
 documentation:
   - docs/design.md
-ordinal: 24000
+ordinal: 30000
 ---
 
 ## Description

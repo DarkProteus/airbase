@@ -15,7 +15,7 @@ dependencies:
   - TASK-30
 documentation:
   - docs/design.md
-ordinal: 31000
+ordinal: 27000
 ---
 
 ## Description

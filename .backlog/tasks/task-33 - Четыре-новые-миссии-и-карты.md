@@ -13,7 +13,7 @@ dependencies:
   - TASK-31
 documentation:
   - docs/design.md
-ordinal: 33000
+ordinal: 29000
 ---
 
 ## Description

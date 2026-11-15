@@ -13,7 +13,7 @@ dependencies:
   - TASK-26
 documentation:
   - docs/design.md
-ordinal: 30000
+ordinal: 26000
 ---
 
 ## Description

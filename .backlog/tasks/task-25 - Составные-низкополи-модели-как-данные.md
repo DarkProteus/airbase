@@ -13,7 +13,7 @@ labels:
 dependencies: []
 documentation:
   - docs/design.md
-ordinal: 25000
+ordinal: 24000
 ---
 
 ## Description
