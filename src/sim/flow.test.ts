@@ -46,7 +46,7 @@ describe('поток экранов', () => {
   });
 
   test('вылет с неполным составом невозможен', () => {
-    const base = initialFlow(START_PROFILE);
+    const base = initialFlow({ ...START_PROFILE, lineup: START_PROFILE.lineup.slice(0, LINEUP_SIZE - 1) });
     expect(flowStep(base, sortie())).toBe(base);
   });
 

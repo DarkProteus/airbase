@@ -79,10 +79,10 @@ describe('предупреждение о волне', () => {
 
   test('до старта: секунды, точки входа, состав, кто может бить', () => {
     const w = warn(evac, 2 * TICK_RATE)!;
-    expect(w).toMatchObject({ wave: 1, waves: 4, total: 5 });
+    expect(w).toMatchObject({ wave: 1, waves: 4, total: 4 });
     expect(w.seconds).toBeCloseTo(4, 6);
     expect(w.entries).toEqual([
-      { spawn: 0, at: { x: 0, y: 1 }, items: [{ enemy: 'drone', name: 'Дрон', count: 5, kind: 'air', hitBy: ['F-16'] }] },
+      { spawn: 0, at: { x: 0, y: 1 }, items: [{ enemy: 'drone', name: 'Дрон', count: 4, kind: 'air', hitBy: ['F-16'] }] },
     ]);
   });
 
@@ -92,8 +92,8 @@ describe('предупреждение о волне', () => {
     expect(w.entries.map((e) => e.spawn)).toEqual([1, 2]);
     expect(w.entries[0]!.items).toEqual([{ enemy: 'tank', name: 'Бронетехника', count: 2, kind: 'ground', hitBy: [] }]);
     expect(w.entries[1]!.at).toEqual(evac.spawns![2]);
-    expect(w.entries[1]!.items[0]).toMatchObject({ enemy: 'drone', count: 5, kind: 'air' });
-    expect(w.total).toBe(7);
+    expect(w.entries[1]!.items[0]).toMatchObject({ enemy: 'drone', count: 4, kind: 'air' });
+    expect(w.total).toBe(6);
   });
 
   test('одинаковые враги одного входа складываются', () => {

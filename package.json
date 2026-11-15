@@ -9,6 +9,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "tsc --noEmit && vitest run",
+    "balance": "node scripts/balance.mjs",
     "prepare": "git config core.hooksPath .githooks"
   },
   "dependencies": {

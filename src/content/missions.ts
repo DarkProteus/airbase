@@ -15,10 +15,10 @@ const evac: MissionConfig = {
   ],
   baseLives: 1,
   waves: [
-    { prep: 6, groups: [{ enemy: 'drone', count: 5, interval: 1.2, spawn: 0 }] },
-    { prep: 8, groups: [{ enemy: 'tank', count: 2, interval: 3, spawn: 1 }, { enemy: 'drone', count: 5, interval: 1, spawn: 2, delay: 2 }] },
-    { prep: 10, groups: [{ enemy: 'runner', count: 6, interval: 0.6, spawn: 0 }, { enemy: 'tank', count: 3, interval: 2.5, spawn: 2 }] },
-    { prep: 12, groups: [{ enemy: 'drone', count: 8, interval: 0.7, spawn: 1 }, { enemy: 'runner', count: 6, interval: 0.5, spawn: 2, delay: 3 }, { enemy: 'tank', count: 3, interval: 2, spawn: 0, delay: 5 }] },
+    { prep: 6, groups: [{ enemy: 'drone', count: 4, interval: 1.4, spawn: 0 }] },
+    { prep: 10, groups: [{ enemy: 'tank', count: 2, interval: 4, spawn: 1 }, { enemy: 'drone', count: 4, interval: 1.2, spawn: 2, delay: 2 }] },
+    { prep: 12, groups: [{ enemy: 'runner', count: 4, interval: 0.8, spawn: 0 }, { enemy: 'tank', count: 2, interval: 4, spawn: 2 }] },
+    { prep: 12, groups: [{ enemy: 'drone', count: 6, interval: 0.9, spawn: 1 }, { enemy: 'runner', count: 4, interval: 0.7, spawn: 2, delay: 3 }, { enemy: 'tank', count: 3, interval: 4, spawn: 0, delay: 5 }] },
   ],
 };
 
@@ -91,7 +91,7 @@ const bastion: MissionConfig = {
   name: 'Укрепрайон',
   size: { w: 17, h: 13 },
   airfield: { x: 0, y: 10 },
-  objective: { type: 'defend', pos: { x: 9, y: 6 }, hp: 36, duration: 150 },
+  objective: { type: 'defend', pos: { x: 9, y: 6 }, hp: 44, duration: 150 },
   reward: { win: 200, loss: 45 },
   spawns: [
     { x: 16, y: 0 },
@@ -137,7 +137,7 @@ const river: MissionConfig = {
       { x: 10, y: 2 },
       { x: 14, y: 2 },
     ],
-    hp: 28,
+    hp: 32,
     speed: 0.25,
   },
   reward: { win: 190, loss: 40 },
@@ -184,7 +184,7 @@ const pass: MissionConfig = {
       { x: 14, y: 2 },
       { x: 18, y: 2 },
     ],
-    hp: 50,
+    hp: 43,
     speed: 0.3,
   },
   reward: { win: 240, loss: 50 },

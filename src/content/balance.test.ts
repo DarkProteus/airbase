@@ -1,58 +1,91 @@
 import { describe, expect, test } from 'vitest';
-import { runMatch } from '../sim';
-import { CONTENT, LINEUP_SIZE, MISSIONS } from '.';
+import { CAMPAIGN, GROUPS, LINEUP_SIZE, MISSIONS, START_PROFILE } from '.';
+import { allLineups, combos, economy, lineupKey, sweep } from './sweep';
 
+/** Сиды теста: три из сидов отчёта — компромисс между надёжностью и скоростью; полный набор гоняет `npm run balance`. */
 const SEEDS = [1, 2, 3];
 
-/** Все сочетания по k элементов. */
-const combos = <T>(items: T[], k: number): T[][] =>
-  k === 0 ? [[]] : items.flatMap((x, i) => combos(items.slice(i + 1), k - 1).map((rest) => [x, ...rest]));
-
-/** Базовые группы этапа 0.1: на них держится исходный баланс; новые (ДРЛО, заправщик) проверяются отдельно. */
+/** Базовые группы этапа 0.1; новые (ДРЛО, заправщик) дополнительно проверяются как выбор, а не автовыбор. */
 const BASE = ['f16', 'a10', 'growler', 'c130'];
 const NEW = ['e3', 'kc135'];
 
 const LINEUPS = combos(BASE, LINEUP_SIZE);
-/** Баланс 3 из 4 базовых групп — на двух первых миссиях; остальные миссии проверяются отдельно (missions.bot.test.ts). */
+/** Сравнение новых групп с базовыми — на двух первых миссиях, где базовые составы выигрывают. */
 const missions = [MISSIONS.evac!, MISSIONS.convoy!];
 
-/** Headless-бот прогоняет состав по всем сидам. Оценка: сначала число побед, затем средняя награда. */
-function rate(mission: (typeof missions)[number], lineup: string[]) {
-  const runs = SEEDS.map((seed) => runMatch(mission, CONTENT, seed, lineup));
-  const wins = runs.filter((r) => r.status === 'won').length;
-  return { lineup, wins, score: wins * 1e6 + runs.reduce((sum, r) => sum + r.reward, 0) / runs.length };
-}
+/** Полный прогон: все миссии кампании × все составы из трёх групп × сиды. Считается один раз на файл. */
+const ROWS = sweep(SEEDS);
+const rowOf = (mission: string, lineup: readonly string[]) => ROWS.find((r) => r.mission === mission && lineupKey(r.lineup) === lineupKey(lineup))!;
 
-describe('баланс составов 3 из 4 базовых групп (headless)', () => {
-  const table = missions.map((m) => ({ id: m.id, rows: LINEUPS.map((l) => rate(m, l)) }));
-  const best = table.map((t) => t.rows.reduce((a, b) => (b.score > a.score ? b : a)));
+describe('баланс: все миссии × все составы (headless)', () => {
+  const lineups = allLineups();
 
-  test('миссий две, составов — все сочетания 3 из 4', () => {
-    expect(missions).toHaveLength(2);
-    expect(LINEUPS).toHaveLength(4);
+  test('прогоны покрывают все миссии кампании, все составы и несколько сидов', () => {
+    expect(CAMPAIGN.slice().sort()).toEqual(Object.keys(MISSIONS).sort());
+    expect(lineups).toHaveLength(20);
+    expect(ROWS).toHaveLength(CAMPAIGN.length * lineups.length);
+    for (const r of ROWS) expect(r.runs).toHaveLength(SEEDS.length);
+    expect(SEEDS.length).toBeGreaterThanOrEqual(3);
   });
 
-  test.each(table)('$id проходима хотя бы одним составом на всех сидах', ({ rows }) => {
-    expect(rows.some((r) => r.wins === SEEDS.length)).toBe(true);
-  });
-
-  test.each(table)('$id не проходится любым составом: выбор имеет значение', ({ rows }) => {
+  test.each(CAMPAIGN)('%s: есть выигрышный состав, и есть составы без единой победы — выбор имеет значение', (id) => {
+    const rows = ROWS.filter((r) => r.mission === id);
+    expect(rows.some((r) => r.winning)).toBe(true);
     expect(rows.some((r) => r.wins === 0)).toBe(true);
   });
 
-  test('лучшие составы двух миссий различаются', () => {
-    expect(best[0]!.lineup).not.toEqual(best[1]!.lineup);
+  test('ни один состав не выигрывает все миссии — даже на части сидов', () => {
+    for (const lineup of lineups) {
+      const won = CAMPAIGN.filter((id) => rowOf(id, lineup).wins > 0);
+      expect(won.length, lineup.join('+')).toBeLessThan(CAMPAIGN.length);
+    }
   });
 
-  test.each(BASE)('%s входит в лучший состав хотя бы одной миссии', (group) => {
-    expect(best.some((b) => b.lineup.includes(group))).toBe(true);
+  test.each(Object.keys(GROUPS))('%s входит хотя бы в один выигрышный состав', (group) => {
+    expect(ROWS.some((r) => r.winning && r.lineup.includes(group))).toBe(true);
+  });
+
+  test('ни одна группа не обязательна везде: у каждой есть миссия с выигрышным составом без неё', () => {
+    for (const group of Object.keys(GROUPS)) expect(ROWS.some((r) => r.winning && !r.lineup.includes(group)), group).toBe(true);
+  });
+
+  test('первая миссия кампании проходится стартовым составом без покупок', () => {
+    expect(START_PROFILE.lineup).toHaveLength(LINEUP_SIZE);
+    const row = rowOf(CAMPAIGN[0]!, START_PROFILE.lineup);
+    expect(row.wins).toBe(SEEDS.length);
+    // Не на последнем издыхании: остаётся не меньше трети прочности цели.
+    expect(row.hp).toBeGreaterThanOrEqual(MISSIONS[CAMPAIGN[0]!]!.objective!.hp / 3);
   });
 });
 
-/** Исход прогона состава по сидам: сначала число побед, затем средний остаток прочности цели (hp). */
+describe('экономика одного прохода кампании', () => {
+  const eco = economy(ROWS);
+
+  test('даже при худших выигрышных составах валюты хватает на все некупленные группы', () => {
+    expect(eco.groupsCost).toBeGreaterThan(0);
+    expect(eco.income.low).toBeGreaterThanOrEqual(eco.groupsCost);
+  });
+
+  test('даже при лучших составах валюты не хватает на все улучшения', () => {
+    expect(eco.income.high).toBeLessThan(eco.upgradesCost);
+  });
+
+  test('после покупки всех групп остаётся на заметную часть улучшений, но не больше трёх четвертей', () => {
+    const share = (eco.income.mid - eco.groupsCost) / eco.upgradesCost;
+    expect(share).toBeGreaterThan(0.4);
+    expect(share).toBeLessThan(0.75);
+  });
+
+  test('первой победы хватает на покупку любой группы', () => {
+    const dearest = Math.max(...Object.values(GROUPS).map((g) => g.cost));
+    expect(eco.start + eco.missions[0]!.low).toBeGreaterThanOrEqual(dearest);
+  });
+});
+
+/** Исход состава на миссии из полного прогона: сначала число побед, затем средний остаток прочности цели (hp). */
 function outcome(mission: (typeof missions)[number], lineup: string[]) {
-  const runs = SEEDS.map((seed) => runMatch(mission, CONTENT, seed, lineup));
-  return { lineup, wins: runs.filter((r) => r.status === 'won').length, hp: runs.reduce((sum, r) => sum + r.hp, 0) / runs.length };
+  const row = rowOf(mission.id, lineup);
+  return { lineup, wins: row.wins, hp: row.hp };
 }
 type Outcome = ReturnType<typeof outcome>;
 const cmp = (a: Outcome, b: Outcome) => a.wins - b.wins || a.hp - b.hp;

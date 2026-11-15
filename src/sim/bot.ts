@@ -1,5 +1,6 @@
 import { createSim, step, TICK_RATE, type Command, type Sim } from './engine';
 import { createObjective } from './objective';
+import { groupStats, weaponHits, type GroupState } from './sortie';
 import type { Content, MissionConfig, Vec2 } from './types';
 
 export interface MatchResult {
@@ -17,11 +18,47 @@ export interface MatchResult {
 /** Куда бот ставит зоны: на текущую позицию цели миссии, без цели — на конец пути врагов. */
 const focus = (sim: Sim): Vec2 => sim.state.objective?.pos ?? sim.path!.points.at(-1)!;
 
-/** Бот переносит зону, когда цель ушла от её центра дальше этого расстояния (клеток). */
+/** Бот переносит зону, когда нужная точка ушла от её центра дальше этого расстояния (клеток). */
 const FOLLOW = 0.5;
 
+/** Доля радиуса зоны, на которую ударная группа выносит зону от цели навстречу врагу: цель миссии остаётся внутри зоны. */
+const LEAN = 0.6;
+
+/** Бот учитывает врагов не дальше стольких радиусов зоны от цели миссии: дальние ещё не угроза. */
+const APPROACH = 3;
+
 /**
- * Headless-матч: состав `lineup` (id групп, уровень 0) держит зоны на цели миссии и двигает их вслед за ней.
+ * Где бот хочет видеть зону группы. Группа поддержки (без оружия) держит зону на цели миссии — аура накрывает подступы.
+ * Ударная выносит зону от цели в сторону подходящих врагов, по которым может стрелять: смещение — среднее направлений на них,
+ * поэтому против одной колонны зона уходит ей навстречу (враг дольше идёт под огнём), а при атаке с разных сторон остаётся на цели.
+ * Игрок делает то же самое переносом зон.
+ */
+export function botZone(sim: Sim, g: GroupState): Vec2 {
+  const at = focus(sim);
+  const weapons = sim.content.groups[g.type]!.weapons;
+  if (!weapons.length) return at;
+  const radius = groupStats(sim, g).zoneRadius;
+  let dx = 0;
+  let dy = 0;
+  let n = 0;
+  for (const e of sim.state.enemies) {
+    const tags = sim.content.enemies[e.type]!.tags;
+    if (!weapons.some((w) => weaponHits(w, tags))) continue;
+    const d = Math.hypot(e.pos.x - at.x, e.pos.y - at.y);
+    if (d < 1e-6 || d > radius * APPROACH) continue;
+    dx += (e.pos.x - at.x) / d;
+    dy += (e.pos.y - at.y) / d;
+    n++;
+  }
+  if (!n) return at;
+  const lean = (radius * LEAN) / n;
+  const { w, h } = sim.mission.size;
+  const clamp = (v: number, max: number) => Math.min(max - 1, Math.max(0, v));
+  return { x: clamp(at.x + dx * lean, w), y: clamp(at.y + dy * lean, h) };
+}
+
+/**
+ * Headless-матч: состав `lineup` (id групп, уровень 0) держит зоны у цели миссии и двигает их вслед за ней и навстречу врагам.
  * Основа симулятора баланса (design.md §4).
  */
 export function runMatch(mission: MissionConfig, content: Content, seed: number, lineup: readonly string[], maxSeconds = 1200): MatchResult {
@@ -31,10 +68,11 @@ export function runMatch(mission: MissionConfig, content: Content, seed: number,
   let kills = 0;
   let sorties = 0;
   for (let i = 0; i < maxSeconds * TICK_RATE && s.status === 'running'; i++) {
-    const at = focus(match);
-    const commands: Command[] = s.groups
-      .filter((g) => Math.hypot(g.zone.x - at.x, g.zone.y - at.y) > FOLLOW)
-      .map((g) => ({ type: 'setZone', group: g.id, zone: { ...at } }));
+    const commands: Command[] = [];
+    for (const g of s.groups) {
+      const zone = botZone(match, g);
+      if (Math.hypot(g.zone.x - zone.x, g.zone.y - zone.y) > FOLLOW) commands.push({ type: 'setZone', group: g.id, zone });
+    }
     step(match, commands);
     for (const ev of s.events) {
       if (ev.type === 'kill') kills++;
