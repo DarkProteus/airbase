@@ -1,4 +1,4 @@
-import { enemyDetected, ownModifiers, TICK_RATE, weaponHits } from '../../sim';
+import { enemyDetected, everyModifier, TICK_RATE, weaponHits } from '../../sim';
 import type { AirGroupConfig, Content, MissionConfig, SimState, Vec2, World } from '../../sim';
 
 /**
@@ -38,7 +38,7 @@ export interface EnemyMark {
 
 /** Есть ли у группы аура обнаружения (стат detect по врагам) на каком-либо уровне улучшений. */
 export const groupDetects = (cfg: Pick<AirGroupConfig, 'auras' | 'upgrades'>): boolean =>
-  ownModifiers(cfg as AirGroupConfig, cfg.upgrades.length).some((m) => m.stat === 'detect' && m.side === 'enemy' && m.scope !== 'self' && m.value > 0);
+  everyModifier(cfg).some((m) => m.stat === 'detect' && m.side === 'enemy' && m.scope !== 'self' && m.value > 0);
 
 export function enemyMarks(content: Content, state: SimState, selectedGroup: number | null = null): EnemyMark[] {
   const group = state.groups.find((g) => g.id === selectedGroup);

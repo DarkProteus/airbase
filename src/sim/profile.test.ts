@@ -40,7 +40,7 @@ describe('покупка и улучшение', () => {
     expect(upgradeRejection(poor, GROUPS, 'f16')).toBe('notEnoughCurrency');
     expect(up(poor, 'f16')).toBe(poor);
     const rich: Profile = { ...START_PROFILE, currency: 10_000 };
-    const maxed = up(up(rich, 'f16'), 'f16');
+    const maxed = upgradeGroup(up(up(rich, 'f16'), 'f16'), GROUPS, 'f16', 'hunter');
     expect(maxed.levels.f16).toBe(GROUPS.f16!.upgrades.length);
     expect(upgradeRejection(maxed, GROUPS, 'f16')).toBe('maxLevel');
     expect(up(maxed, 'f16')).toBe(maxed);

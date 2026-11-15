@@ -16,6 +16,7 @@ const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isI
  * выкидываются из уровней и состава, уровень выше максимума срезается, состав чистится от непокупных групп,
  * дублей и лишних слотов сверх `lineupSize`. Поля, добавленные позже (`tutorialDone`), в старом сохранении
  * отсутствуют — версия формата не меняется, профиль читается как есть (обучение ещё не пройдено).
+ * То же для `specs`: нет поля — выбор не сделан, действует первый вариант развилки.
  */
 export function parseProfile(raw: string | null | undefined, groups: GroupRegistry, lineupSize: number): Profile | undefined {
   if (typeof raw !== 'string') return undefined;
@@ -39,5 +40,22 @@ export function parseProfile(raw: string | null | undefined, groups: GroupRegist
   const slots = (lineup as string[]).filter((id, i, all) => Object.hasOwn(kept, id) && all.indexOf(id) === i).slice(0, lineupSize);
   // Флаг обучения необязателен: старые сохранения его не знают, любое значение кроме true — «не пройдено».
   const tutorialDone = data.profile.tutorialDone === true;
-  return { currency, levels: kept, lineup: slots, ...(tutorialDone ? { tutorialDone } : {}) };
+  // Специализации необязательны (старые сохранения их не знают): остаются только выборы известных групп,
+  // чья развилка куплена и чей вариант существует; остальное отбрасывается, а на бою действует первый вариант.
+  const specs: Record<string, string> = {};
+  if (isRecord(data.profile.specs)) {
+    for (const [id, spec] of Object.entries(data.profile.specs)) {
+      if (!Object.hasOwn(kept, id) || typeof spec !== 'string') continue;
+      const cfg = groups[id]!;
+      const fork = cfg.upgrades.slice(0, kept[id]).find((u) => u.options);
+      if (fork?.options?.some((o) => o.id === spec)) specs[id] = spec;
+    }
+  }
+  return {
+    currency,
+    levels: kept,
+    lineup: slots,
+    ...(Object.keys(specs).length ? { specs } : {}),
+    ...(tutorialDone ? { tutorialDone } : {}),
+  };
 }

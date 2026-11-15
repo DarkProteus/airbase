@@ -1,4 +1,4 @@
-import { ownModifiers } from '../../sim';
+import { forkLevel, ownModifiers } from '../../sim';
 import { useGalleryStore } from '../../store/gallery';
 import { EntityCard } from '../entity/EntityCard';
 import { GroupCard } from '../entity/GroupCard';
@@ -8,13 +8,13 @@ import './gallery.css';
 
 /** Dev-галерея: всё, что описано реестрами контента, с переключателями параметров. */
 export function GalleryPage() {
-  const { levels, activeSources, activeTags, setLevel, toggleSource, toggleTag, reset } = useGalleryStore();
+  const { levels, specs, activeSources, activeTags, setLevel, setSpec, toggleSource, toggleTag, reset } = useGalleryStore();
   const groups = listGroups();
   const enemies = listEnemies();
   const auraGroups = listAuraSources();
   const tags = collectTags();
   // Источник действует на своём текущем уровне (ползунок его карточки).
-  const sources = auraGroups.filter((g) => activeSources.includes(g.id)).map((group) => ({ group, level: levels[group.id] ?? 0 }));
+  const sources = auraGroups.filter((g) => activeSources.includes(g.id)).map((group) => ({ group, level: levels[group.id] ?? 0, spec: specs[group.id] }));
 
   return (
     <main className="gallery">
@@ -36,7 +36,7 @@ export function GalleryPage() {
           {auraGroups.map((g) => (
             <label key={g.id} className="chk" title={g.id}>
               <input type="checkbox" checked={activeSources.includes(g.id)} onChange={() => toggleSource(g.id)} /> {g.name}:{' '}
-              {ownModifiers(g, clampLevel(g, levels[g.id] ?? 0))
+              {ownModifiers(g, clampLevel(g, levels[g.id] ?? 0), specs[g.id])
                 .filter((m) => m.scope !== 'self')
                 .map(formatModifier)
                 .join('; ')}
@@ -52,7 +52,9 @@ export function GalleryPage() {
         <h2>Авиагруппы ({groups.length})</h2>
         <div className="grid">
           {groups.map((u) => {
-            const view = viewGroupWhatIf(u, levels[u.id] ?? 0, sources, activeTags);
+            const view = viewGroupWhatIf(u, levels[u.id] ?? 0, sources, activeTags, specs[u.id]);
+            const fork = forkLevel(u);
+            const forkOptions = fork !== undefined ? u.upgrades[fork - 1]!.options : undefined;
             return (
               <div key={u.id} className="cell">
                 <GroupCard group={u} view={view} />
@@ -67,6 +69,24 @@ export function GalleryPage() {
                     onChange={(e) => setLevel(u.id, Number(e.target.value))}
                   />
                 </label>
+                {forkOptions && view.level >= fork! && (
+                  <div className="spec-switch" role="group" aria-label="Специализация">
+                    {forkOptions.map((o) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        className={view.spec?.id === o.id ? 'btn btn-primary' : 'btn'}
+                        data-testid="gallery-spec"
+                        data-option={o.id}
+                        aria-pressed={view.spec?.id === o.id}
+                        title={o.description}
+                        onClick={() => setSpec(u.id, o.id)}
+                      >
+                        {o.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}

@@ -125,3 +125,4 @@
 .tutorial-text { margin: 0 0 var(--sp-2); line-height: 1.4; }
 .tutorial-actions { display: flex; justify-content: space-between; }
 .tutorial-actions .btn { padding: 3px 12px; }
+.group-spec { color: var(--accent); font-weight: 400; }

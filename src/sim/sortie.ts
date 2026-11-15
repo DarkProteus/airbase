@@ -1,4 +1,4 @@
-import type { RejectReason, World } from './economy';
+import { activeSpec, pickOption, type RejectReason, type World } from './economy';
 import { damageEnemy, DT, enemyThreat, TICK_RATE, type EnemyState, type Sim } from './engine';
 import { applyModifiers } from './stats';
 import type { AirGroupConfig, Content, MissionConfig, Modifier, Vec2, WeaponConfig } from './types';
@@ -10,6 +10,8 @@ export type SortiePhase = 'takeoff' | 'transit' | 'patrol' | 'return' | 'rearm';
 export interface LineupEntry {
   group: string;
   level: number;
+  /** id выбранного варианта развилки улучшений; нет или неизвестный — первый вариант (если развилка куплена). */
+  spec?: string;
   zone: Vec2;
 }
 
@@ -17,6 +19,8 @@ export interface GroupState {
   id: number;
   type: string;
   level: number;
+  /** Действующая специализация (id варианта развилки); нет — развилка ещё не куплена. */
+  spec?: string;
   /** Центр зоны патрулирования; радиус — из статов группы. */
   zone: Vec2;
   phase: SortiePhase;
@@ -78,18 +82,27 @@ function groupConfig(content: Content, type: string): AirGroupConfig {
   return cfg;
 }
 
-/** Свои модификаторы группы: ауры конфига + купленные уровни улучшений. */
-export const ownModifiers = (cfg: AirGroupConfig, level: number): Modifier[] => [
+/**
+ * Свои модификаторы группы: ауры конфига + купленные уровни улучшений; на уровне-развилке — выбранный вариант
+ * (`spec`; не указан или неизвестен — первый). Единственное место, где уровень и выбор превращаются в модификаторы.
+ */
+export const ownModifiers = (cfg: AirGroupConfig, level: number, spec?: string): Modifier[] => [
   ...cfg.auras,
-  ...cfg.upgrades.slice(0, level).flatMap((u) => u.modifiers),
+  ...cfg.upgrades.slice(0, level).flatMap((u) => [...u.modifiers, ...(pickOption(u, spec)?.modifiers ?? [])]),
+];
+
+/** Все модификаторы, какие группа может получить: ауры и каждый вариант каждого уровня (для каталога и разметки). */
+export const everyModifier = (cfg: Pick<AirGroupConfig, 'auras' | 'upgrades'>): Modifier[] => [
+  ...cfg.auras,
+  ...cfg.upgrades.flatMap((u) => [...u.modifiers, ...(u.options ?? []).flatMap((o) => o.modifiers)]),
 ];
 
 /**
  * Параметры группы по конфигу и уровню: свои self-модификаторы + внешние (`external` — ауры других групп,
  * уже отобранные по радиусу и тегам). Этой же функцией считают карточки базы и галереи.
  */
-export function configStats(cfg: AirGroupConfig, level: number, external: readonly Modifier[] = []): GroupStats {
-  const mods = [...ownModifiers(cfg, level).filter((m) => m.scope === 'self' && m.side !== 'enemy'), ...external];
+export function configStats(cfg: AirGroupConfig, level: number, external: readonly Modifier[] = [], spec?: string): GroupStats {
+  const mods = [...ownModifiers(cfg, level, spec).filter((m) => m.scope === 'self' && m.side !== 'enemy'), ...external];
   const s = applyModifiers(
     { speed: cfg.speed, fuel: cfg.fuel, ammo: cfg.ammo, rearmTime: cfg.rearmTime, range: cfg.zoneRadius, income: cfg.income ?? 0 },
     mods,
@@ -109,8 +122,8 @@ export function configStats(cfg: AirGroupConfig, level: number, external: readon
 }
 
 /** Собственные параметры группы матча — без аур других групп (ёмкость бака, боекомплект, радиус её ауры). */
-export const groupStats = (w: { readonly content: Content }, g: Pick<GroupState, 'type' | 'level'>, external: readonly Modifier[] = []): GroupStats =>
-  configStats(groupConfig(w.content, g.type), g.level, external);
+export const groupStats = (w: { readonly content: Content }, g: Pick<GroupState, 'type' | 'level' | 'spec'>, external: readonly Modifier[] = []): GroupStats =>
+  configStats(groupConfig(w.content, g.type), g.level, external, g.spec);
 
 /** Источник аур: патрулирующая группа; аура исходит из центра её зоны. */
 export interface AuraSource {
@@ -129,8 +142,8 @@ export function auraSources(w: AuraWorld): AuraSource[] {
   for (const g of w.state.groups) {
     if (g.phase !== 'patrol') continue;
     const cfg = groupConfig(w.content, g.type);
-    const mods = ownModifiers(cfg, g.level).filter((m) => m.scope !== 'self');
-    if (mods.length) out.push({ id: g.id, zone: g.zone, radius: configStats(cfg, g.level).zoneRadius, mods });
+    const mods = ownModifiers(cfg, g.level, g.spec).filter((m) => m.scope !== 'self');
+    if (mods.length) out.push({ id: g.id, zone: g.zone, radius: configStats(cfg, g.level, [], g.spec).zoneRadius, mods });
   }
   return out;
 }
@@ -176,12 +189,15 @@ export function createGroup(mission: MissionConfig, content: Content, entry: Lin
   if (!onMapEdge(mission.size, mission.airfield)) throw new Error(`airfield must be on the map edge: ${mission.id}`);
   if (!inMap(mission.size, entry.zone)) throw new Error(`zone outside the map: ${entry.group}`);
   if (entry.level < 0 || entry.level > cfg.upgrades.length) throw new Error(`bad level for ${entry.group}: ${entry.level}`);
-  const st = groupStats({ content }, { type: entry.group, level: entry.level });
+  // Специализация — только если развилка куплена; выбор не указан или неизвестен — первый вариант.
+  const spec = activeSpec(cfg, entry.level, entry.spec)?.id;
+  const st = groupStats({ content }, { type: entry.group, level: entry.level, spec });
   if (st.speed <= 0) throw new Error(`group speed must be positive: ${entry.group}`);
   return {
     id,
     type: entry.group,
     level: entry.level,
+    ...(spec ? { spec } : {}),
     zone: { ...entry.zone },
     phase: 'takeoff',
     phaseTick: 0,

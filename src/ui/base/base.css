@@ -53,3 +53,8 @@
 .base .base-mission span { font-size: var(--fs-sm); color: var(--text-dim); }
 .base .base-mission[data-selected='true'] { border-color: var(--accent); background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--panel); }
 .base-reset { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); font-size: var(--fs); color: var(--danger); }
+
+.spec-options { display: flex; flex-direction: column; gap: 6px; }
+.spec-option { display: flex; flex-direction: column; gap: 4px; padding: var(--sp-2); border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-hover); }
+.spec-desc { font-size: var(--fs-sm); color: var(--text-dim); }
+.spec-changes { margin: 0; padding-left: 16px; font-size: var(--fs-sm); color: var(--success); }

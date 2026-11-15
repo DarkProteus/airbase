@@ -7,6 +7,8 @@ export const REJECTION_TEXT: Record<ProfileRejection, string> = {
   notOwned: 'Сначала купите группу',
   notEnoughCurrency: 'Не хватает валюты',
   maxLevel: 'Максимальный уровень',
+  specRequired: 'Выберите специализацию',
+  unknownSpec: 'Неизвестная специализация',
   lineupFull: 'Состав полон',
   lineupIncomplete: 'Состав неполный: нужно ровно {n}',
 };

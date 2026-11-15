@@ -1,4 +1,4 @@
-import { maxLevel, nextUpgradeCost } from './economy';
+import { maxLevel, nextOptions, nextUpgradeCost } from './economy';
 import type { LineupEntry } from './sortie';
 import type { AirGroupConfig, Vec2 } from './types';
 
@@ -11,6 +11,8 @@ export interface Profile {
   levels: Record<string, number>;
   /** id выбранных групп по слотам: порядок слотов = порядок зон. */
   lineup: string[];
+  /** Выбранные специализации: id группы -> id варианта развилки. Нет поля или записи (старое сохранение) = первый вариант. */
+  specs?: Record<string, string>;
   /** Обучение первого вылета пройдено или пропущено; нет поля (старое сохранение) = ещё не показывали. */
   tutorialDone?: boolean;
 }
@@ -25,6 +27,8 @@ export const PROFILE_REJECTIONS = [
   'notOwned',
   'notEnoughCurrency',
   'maxLevel',
+  'specRequired',
+  'unknownSpec',
   'lineupFull',
   'lineupIncomplete',
 ] as const;
@@ -42,13 +46,21 @@ export function buyRejection(profile: Profile, groups: GroupRegistry, id: string
   return undefined;
 }
 
-/** Улучшение: группа куплена, есть следующий уровень, хватает валюты. */
-export function upgradeRejection(profile: Profile, groups: GroupRegistry, id: string): ProfileRejection | undefined {
+/**
+ * Улучшение: группа куплена, есть следующий уровень, хватает валюты.
+ * Если следующий уровень — развилка, нужен `spec` — id одного из её вариантов (иначе specRequired / unknownSpec).
+ */
+export function upgradeRejection(profile: Profile, groups: GroupRegistry, id: string, spec?: string): ProfileRejection | undefined {
   const cfg = groups[id];
   if (!cfg) return 'unknownGroup';
   if (!isOwned(profile, id)) return 'notOwned';
   const level = profile.levels[id]!;
   if (level >= maxLevel(cfg)) return 'maxLevel';
+  const options = nextOptions(cfg, level);
+  if (options) {
+    if (spec === undefined) return 'specRequired';
+    if (!options.some((o) => o.id === spec)) return 'unknownSpec';
+  }
   if (profile.currency < nextUpgradeCost(cfg, level)!) return 'notEnoughCurrency';
   return undefined;
 }
@@ -73,14 +85,16 @@ export function buyGroup(profile: Profile, groups: GroupRegistry, id: string): P
   return { ...profile, currency: profile.currency - groups[id]!.cost, levels: { ...profile.levels, [id]: 0 } };
 }
 
-/** Следующий уровень улучшения за его цену. При отказе — тот же профиль. */
-export function upgradeGroup(profile: Profile, groups: GroupRegistry, id: string): Profile {
-  if (upgradeRejection(profile, groups, id)) return profile;
+/** Следующий уровень улучшения за его цену; на развилке `spec` сохраняется в профиле. При отказе — тот же профиль. */
+export function upgradeGroup(profile: Profile, groups: GroupRegistry, id: string, spec?: string): Profile {
+  if (upgradeRejection(profile, groups, id, spec)) return profile;
   const level = profile.levels[id]!;
+  const fork = nextOptions(groups[id]!, level) !== undefined;
   return {
     ...profile,
     currency: profile.currency - nextUpgradeCost(groups[id]!, level)!,
     levels: { ...profile.levels, [id]: level + 1 },
+    ...(fork ? { specs: { ...profile.specs, [id]: spec! } } : {}),
   };
 }
 
@@ -96,6 +110,7 @@ export function profileLineup(profile: Profile, zones: readonly Vec2[]): LineupE
   return profile.lineup.map((group, i) => {
     const zone = zones[i];
     if (!zone) throw new Error(`no zone for lineup slot ${i}`);
-    return { group, level: profile.levels[group] ?? 0, zone };
+    const spec = profile.specs?.[group];
+    return { group, level: profile.levels[group] ?? 0, ...(spec ? { spec } : {}), zone };
   });
 }

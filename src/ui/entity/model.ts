@@ -1,5 +1,5 @@
-import { auraMods, configStats, invested, maxLevel, nextUpgradeCost, ownModifiers } from '../../sim';
-import type { AirGroupConfig, AuraSource, GroupStats, ModelConfig, Modifier, VisualConfig, VisualShape } from '../../sim';
+import { activeSpec, auraMods, configStats, invested, maxLevel, nextOptions, nextUpgradeCost, ownModifiers } from '../../sim';
+import type { AirGroupConfig, AuraSource, GroupStats, ModelConfig, Modifier, UpgradeOption, VisualConfig, VisualShape } from '../../sim';
 
 /** Чистая логика отображения сущностей: без React, без three. Строится только из конфигов. */
 
@@ -38,8 +38,27 @@ export function modifierMatchesTags(mod: Modifier, tags: readonly string[]): boo
   return (mod.tags ?? []).every((t) => tags.includes(t));
 }
 
+/** Вариант развилки на карточке: что даст выбор (параметры «было → стало» считает configStats) и сам вариант. */
+export interface OptionView {
+  option: UpgradeOption;
+  /** Собственные параметры группы после покупки уровня с этим вариантом (без внешних аур). */
+  after: GroupStats;
+  /** Изменившиеся собственные параметры: подпись, было, стало. Эффекты аур — в `option.description`. */
+  changes: StatChange[];
+}
+
+export interface StatChange {
+  label: string;
+  from: number;
+  to: number;
+}
+
 export interface GroupView {
   level: number;
+  /** Действующая специализация (развилка куплена); без выбора в профиле — первый вариант. */
+  spec: UpgradeOption | undefined;
+  /** Варианты, если следующее улучшение — развилка; иначе пусто. */
+  options: OptionView[];
   maxLevel: number;
   /** Теги с учётом включённых в песочнице. */
   tags: string[];
@@ -56,6 +75,28 @@ export interface GroupView {
   appliedModifiers: Modifier[];
 }
 
+/** Подписи числовых собственных параметров для списка изменений. */
+const CHANGE_ROWS: { label: string; key: Exclude<keyof GroupStats, 'weapons'> }[] = [
+  { label: 'скорость', key: 'speed' },
+  { label: 'топливо, с', key: 'fuel' },
+  { label: 'боекомплект', key: 'ammo' },
+  { label: 'перезарядка, с', key: 'rearmTime' },
+  { label: 'радиус зоны', key: 'zoneRadius' },
+  { label: 'бонус за вылет', key: 'income' },
+];
+
+/** Что изменилось в собственных параметрах между двумя расчётами (урон и скорострельность — по каждому оружию). */
+export function statChanges(from: GroupStats, to: GroupStats): StatChange[] {
+  const out: StatChange[] = CHANGE_ROWS.filter((r) => from[r.key] !== to[r.key]).map((r) => ({ label: r.label, from: from[r.key], to: to[r.key] }));
+  to.weapons.forEach((w, i) => {
+    const was = from.weapons[i];
+    if (!was) return;
+    if (was.damage !== w.damage) out.push({ label: 'урон', from: was.damage, to: w.damage });
+    if (was.fireRate !== w.fireRate) out.push({ label: 'скорострельность', from: was.fireRate, to: w.fireRate });
+  });
+  return out;
+}
+
 /**
  * Расчёт карточки группы теми же функциями, что в sim (configStats, invested).
  * «Что-если» песочница: extraTags добавляются группе, extraModifiers (ауры союзников) применяются, если подходят по тегам.
@@ -65,21 +106,28 @@ export function viewGroup(
   level = 0,
   extraModifiers: readonly Modifier[] = [],
   extraTags: readonly string[] = [],
+  spec?: string,
 ): GroupView {
   const lv = clampLevel(group, level);
   const tags = [...new Set([...group.tags, ...extraTags])];
   // Как в sim: свои ауры и side: 'enemy' на владельца не действуют — их отсекает configStats.
   const external = extraModifiers.filter((m) => m.side !== 'enemy' && modifierMatchesTags(m, tags));
+  const own = configStats(group, lv, [], spec);
   return {
     level: lv,
+    spec: activeSpec(group, lv, spec),
+    options: (nextOptions(group, lv) ?? []).map((option) => {
+      const after = configStats(group, lv + 1, [], option.id);
+      return { option, after, changes: statChanges(own, after) };
+    }),
     maxLevel: maxLevel(group),
     tags,
     baseStats: configStats(group, 0),
-    own: configStats(group, lv),
-    stats: configStats(group, lv, external),
+    own,
+    stats: configStats(group, lv, external, spec),
     totalCost: invested(group, lv),
     nextUpgradeCost: nextUpgradeCost(group, lv),
-    appliedModifiers: [...ownModifiers(group, lv), ...external],
+    appliedModifiers: [...ownModifiers(group, lv, spec), ...external],
   };
 }
 
@@ -87,6 +135,8 @@ export function viewGroup(
 export interface WhatIfSource {
   group: AirGroupConfig;
   level: number;
+  /** Выбранный вариант развилки; нет — первый. */
+  spec?: string;
 }
 
 /**
@@ -95,11 +145,11 @@ export interface WhatIfSource {
  */
 export function whatIfAuras(target: AirGroupConfig, tags: readonly string[], sources: readonly WhatIfSource[]): Modifier[] {
   const origin = { x: 0, y: 0 };
-  const src: AuraSource[] = sources.map(({ group, level }, id) => ({
+  const src: AuraSource[] = sources.map(({ group, level, spec }, id) => ({
     id,
     zone: origin,
-    radius: configStats(group, clampLevel(group, level)).zoneRadius,
-    mods: ownModifiers(group, clampLevel(group, level)).filter((m) => m.scope !== 'self'),
+    radius: configStats(group, clampLevel(group, level), [], spec).zoneRadius,
+    mods: ownModifiers(group, clampLevel(group, level), spec).filter((m) => m.scope !== 'self'),
   }));
   const self = sources.findIndex((s) => s.group.id === target.id);
   return auraMods(src, 'ally', origin, tags, self < 0 ? undefined : self);
@@ -111,9 +161,10 @@ export function viewGroupWhatIf(
   level: number,
   sources: readonly WhatIfSource[],
   extraTags: readonly string[] = [],
+  spec?: string,
 ): GroupView {
   const tags = [...new Set([...group.tags, ...extraTags])];
-  return viewGroup(group, level, whatIfAuras(group, tags, sources), extraTags);
+  return viewGroup(group, level, whatIfAuras(group, tags, sources), extraTags, spec);
 }
 
 export function formatModifier(m: Modifier): string {

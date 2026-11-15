@@ -1,5 +1,5 @@
 import { ENEMIES, GROUPS } from '../../content';
-import { ownModifiers } from '../../sim';
+import { everyModifier } from '../../sim';
 import type { AirGroupConfig, EnemyConfig } from '../../sim';
 
 /** Что показывает галерея: ровно содержимое реестров контента. */
@@ -24,12 +24,12 @@ export function collectTags(reg: Registries = CONTENT_REGISTRIES): string[] {
   for (const e of [...listGroups(reg), ...listEnemies(reg)]) for (const t of e.tags) tags.add(t);
   for (const u of listGroups(reg)) {
     for (const w of u.weapons) for (const t of w.targetTags) tags.add(t);
-    for (const m of [...u.auras, ...u.upgrades.flatMap((g) => g.modifiers)]) for (const t of m.tags ?? []) tags.add(t);
+    for (const m of everyModifier(u)) for (const t of m.tags ?? []) tags.add(t);
   }
   return [...tags].sort();
 }
 
-/** Группы-источники аур для «что-если»: хотя бы один не-self модификатор (в конфиге или улучшениях). */
+/** Группы-источники аур для «что-если»: хотя бы один не-self модификатор (в конфиге, улучшениях или любом варианте развилки). */
 export function listAuraSources(reg: Registries = CONTENT_REGISTRIES): AirGroupConfig[] {
-  return listGroups(reg).filter((g) => ownModifiers(g, g.upgrades.length).some((m) => m.scope !== 'self'));
+  return listGroups(reg).filter((g) => everyModifier(g).some((m) => m.scope !== 'self'));
 }

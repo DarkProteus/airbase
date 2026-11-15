@@ -21,3 +21,4 @@
 .stats .down { color: var(--danger); }
 .mods { margin: 6px 0 0; padding-left: 16px; font-size: var(--fs-sm); color: var(--text-dim); }
 .upgrade { margin-top: 6px; font-size: var(--fs-sm); color: var(--text-faint); }
+.spec { margin-top: 4px; font-size: var(--fs-sm); color: var(--accent); }

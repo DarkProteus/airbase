@@ -1,4 +1,4 @@
-import { effectiveGroupStats, groupStats, objectiveGoal, objectiveRoute, rearmTicksLeft, TICK_RATE, toTicks, zoneRejection } from '../../sim';
+import { activeSpec, effectiveGroupStats, groupStats, objectiveGoal, objectiveRoute, rearmTicksLeft, TICK_RATE, toTicks, zoneRejection } from '../../sim';
 import { attackLinks, groupTargetKinds, targetKind } from './markup';
 import type { TargetKind } from './markup';
 import type { Command, Content, MissionConfig, ObjectiveConfig, RejectReason, SimEvent, SimState, SortiePhase, Vec2, World } from '../../sim';
@@ -86,6 +86,8 @@ export interface GroupRow {
   ammo: { left: number; max: number };
   /** Секунд до конца перезарядки; null вне фазы rearm. */
   rearmSeconds: number | null;
+  /** Название действующей специализации (куплена развилка улучшений); нет — undefined. */
+  spec: string | undefined;
   /** Радиус зоны патрулирования в клетках (после модификаторов и аур союзников). */
   zoneRadius: number;
   /** Цвет группы из конфига: им же рисуются её зона и трассеры. */
@@ -113,6 +115,7 @@ export function groupRows(w: World): GroupRow[] {
       fuel: { seconds: g.fuel / TICK_RATE, ratio: capacity > 0 ? Math.min(1, g.fuel / capacity) : 0 },
       ammo: { left: g.ammo, max: st.ammo },
       rearmSeconds: g.phase === 'rearm' ? rearmTicksLeft(w, g) / TICK_RATE : null,
+      spec: cfg && activeSpec(cfg, g.level, g.spec)?.name,
       zoneRadius: effectiveGroupStats(w, g).zoneRadius,
       color: cfg?.visual?.color,
       targets: cfg ? groupTargetKinds(cfg) : [],

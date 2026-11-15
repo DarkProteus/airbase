@@ -8,3 +8,4 @@
 .cell { display: flex; flex-direction: column; gap: var(--sp-1); }
 .level { display: flex; flex-direction: column; font-size: var(--fs-sm); color: var(--text-dim); }
 footer { margin-top: var(--sp-5); font-size: var(--fs-sm); color: var(--text-faint); }
+.spec-switch { display: flex; flex-wrap: wrap; gap: var(--sp-1); }

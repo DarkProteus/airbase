@@ -87,6 +87,27 @@ export interface WeaponConfig {
   shot?: ShotKind;
 }
 
+/** Вариант развилки улучшения (специализация): заметно разные модификаторы за одну цену. */
+export interface UpgradeOption {
+  id: string;
+  /** Короткое название специализации для игрока. */
+  name: string;
+  /** Одно предложение: чем специализация отличается (в том числе эффекты аур, которых нет в собственных параметрах). */
+  description: string;
+  modifiers: Modifier[];
+}
+
+/**
+ * Один уровень улучшения: общая цена и модификаторы. Если задан `options`, уровень — развилка:
+ * игрок при покупке выбирает один из двух вариантов; применяются `modifiers` (общие, могут быть пустыми) и модификаторы выбранного.
+ * На группу — не больше одной развилки.
+ */
+export interface UpgradeConfig {
+  cost: number;
+  modifiers: Modifier[];
+  options?: [UpgradeOption, UpgradeOption];
+}
+
 /**
  * Авиагруппа: не стоит в точке, а летает вылетами (см. sortie.ts):
  * взлёт → перелёт → патруль в зоне → возврат → перезарядка → снова.
@@ -115,8 +136,8 @@ export interface AirGroupConfig {
   weapons: WeaponConfig[];
   /** Аура-модификаторы группы; scope 'self' действует на саму группу. */
   auras: Modifier[];
-  /** Уровни улучшения: каждый добавляет свои модификаторы. */
-  upgrades: { cost: number; modifiers: Modifier[] }[];
+  /** Уровни улучшения: каждый добавляет свои модификаторы; один из них может быть развилкой специализаций. */
+  upgrades: UpgradeConfig[];
   visual?: VisualConfig;
 }
 

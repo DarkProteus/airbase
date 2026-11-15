@@ -12,9 +12,12 @@ import {
 import type { AirGroupConfig, Profile, ProfileRejection } from '../../sim';
 import { GroupCard } from '../entity/GroupCard';
 import { viewGroup } from '../entity/model';
+import type { GroupView } from '../entity/model';
 import { missionSummary, rejectionText, resetStep } from './model';
 import type { ResetStep } from './model';
 import './base.css';
+
+const fmt = (n: number) => String(Math.round(n * 100) / 100);
 
 /** Кнопка действия + причина отказа видимым текстом рядом. */
 function Action({
@@ -84,18 +87,46 @@ export function BaseScreen({
   const [missionId, setMissionId] = useState(() => Object.keys(MISSIONS)[0]!);
   const sortieReason = sortieRejection(profile, LINEUP_SIZE);
 
-  const actions = (group: AirGroupConfig) => {
+  const actions = (group: AirGroupConfig, view: GroupView) => {
     const owned = group.id in profile.levels;
     const inLineup = profile.lineup.includes(group.id);
+    const fork = owned && view.options.length > 0;
     return (
       <div className="base-actions">
+        {fork && (
+          <div className="spec-options" data-testid="spec-options">
+            {view.options.map(({ option, changes }) => (
+              <div key={option.id} className="spec-option" data-testid="spec-option" data-option={option.id}>
+                <strong>{option.name}</strong>
+                <span className="spec-desc">{option.description}</span>
+                {changes.length > 0 && (
+                  <ul className="spec-changes" data-testid="spec-changes">
+                    {changes.map((c) => (
+                      <li key={c.label}>
+                        {c.label}: {fmt(c.from)} → {fmt(c.to)}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <Action
+                  testId="spec-pick"
+                  label={`Выбрать · ${view.nextUpgradeCost}`}
+                  reason={upgradeRejection(profile, GROUPS, group.id, option.id)}
+                  onClick={() => setProfile(upgradeGroup(profile, GROUPS, group.id, option.id))}
+                />
+              </div>
+            ))}
+          </div>
+        )}
         {owned ? (
-          <Action
-            testId="upgrade"
-            label="Улучшить"
-            reason={upgradeRejection(profile, GROUPS, group.id)}
-            onClick={() => setProfile(upgradeGroup(profile, GROUPS, group.id))}
-          />
+          !fork && (
+            <Action
+              testId="upgrade"
+              label="Улучшить"
+              reason={upgradeRejection(profile, GROUPS, group.id)}
+              onClick={() => setProfile(upgradeGroup(profile, GROUPS, group.id))}
+            />
+          )
         ) : (
           <Action
             testId="buy"
@@ -153,10 +184,11 @@ export function BaseScreen({
       <section className="base-grid">
         {Object.values(GROUPS).map((group) => {
           const level = profile.levels[group.id] ?? 0;
+          const view = viewGroup(group, level, [], [], profile.specs?.[group.id]);
           const owned = group.id in profile.levels;
           return (
             <div key={group.id} className="base-slot" data-owned={owned} data-lineup={profile.lineup.includes(group.id)}>
-              <GroupCard group={group} view={viewGroup(group, level)} actions={actions(group)} />
+              <GroupCard group={group} view={view} actions={actions(group, view)} />
             </div>
           );
         })}

@@ -86,6 +86,11 @@ export function GroupCard({ group, view = viewGroup(group), onClick, actions }: 
           ур. {view.level}/{view.maxLevel}
           {view.nextUpgradeCost !== undefined && <span> · след. {view.nextUpgradeCost}</span>}
         </div>
+        {view.spec && (
+          <div className="spec" data-testid="spec" data-option={view.spec.id} title={view.spec.description}>
+            Специализация: <strong>{view.spec.name}</strong>
+          </div>
+        )}
         {actions}
       </div>
     </article>

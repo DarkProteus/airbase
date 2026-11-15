@@ -44,6 +44,12 @@ export function GroupPanel({ rows, selected, roles = {}, onSelect }: Props) {
           <span className="group-name">
             <RoleIcon role={roles[r.id]} />
             {r.name}
+            {r.spec && (
+              <small className="group-spec" data-testid="group-spec">
+                {' '}
+                · {r.spec}
+              </small>
+            )}
           </span>
           <span className="group-phase">{r.phaseLabel}</span>
           <span className="group-stat" title="Топливо">
