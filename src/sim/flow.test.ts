@@ -118,8 +118,11 @@ describe('награда начисляется в профиль ровно о�
   });
 
   test('возврат на базу сохраняет начисленное, повторный home ничего не добавляет', () => {
-    const base = flowStep(flowStep(battle, { type: 'finish', final }), { type: 'home' });
-    expect(base).toEqual({ screen: 'base', profile: { ...FULL, currency: FULL.currency + expected.total } });
+    const result = flowStep(battle, { type: 'finish', final }) as Extract<Flow, { screen: 'result' }>;
+    const base = flowStep(result, { type: 'home' });
+    // Профиль итога (валюта и прогресс кампании) переходит на базу как есть — исход матча на проверку не влияет.
+    expect(base).toEqual({ screen: 'base', profile: result.profile });
+    expect(base.profile.currency).toBe(FULL.currency + expected.total);
     expect(flowStep(base, { type: 'home' })).toBe(base);
   });
 

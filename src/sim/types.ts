@@ -181,8 +181,8 @@ export interface WaveGroup {
   interval: number;
   /** Секунд от старта волны до первого спавна. */
   delay?: number;
-  /** Индекс точки входа из `MissionConfig.spawns` (миссии с целью); по умолчанию 0. */
-  spawn?: number;
+  /** Индекс вражеской базы из `MissionConfig.bases` (миссии с целью), с которой идёт группа; по умолчанию 0. */
+  base?: number;
 }
 
 /**
@@ -210,6 +210,25 @@ export type ObjectiveConfig =
   | { type: 'defend'; pos: Vec2; hp: number; duration: number }
   | { type: 'escort'; route: Vec2[]; hp: number; speed: number };
 
+/** Тип врага в списке базы и номер волны (с 1), с которой база его выпускает; без номера — с первой. */
+export interface BaseRosterEntry {
+  enemy: string;
+  fromWave?: number;
+}
+
+/**
+ * Вражеская база: видимая точка на карте, откуда идут враги только её типов. Уничтожить её нельзя.
+ * База «растёт»: запись списка с `fromWave` открывает новый тип с этой волны.
+ */
+export interface EnemyBaseConfig {
+  id: string;
+  /** Название для игрока: по нему понятно, чего ждать с этой базы. */
+  name: string;
+  pos: Vec2;
+  /** Какие типы врагов выпускает база. Пустой список — любые (только для тестовых миссий; в контенте список обязателен). */
+  roster: BaseRosterEntry[];
+}
+
 export interface MissionConfig {
   id: string;
   name: string;
@@ -217,10 +236,10 @@ export interface MissionConfig {
   size: { w: number; h: number };
   /** Полилиния пути врагов в клетках — миссии без цели: враги идут по пути и отнимают жизни базы. */
   path?: Vec2[];
-  /** Цель миссии: с ней враги появляются в `spawns` и летят на текущую позицию цели, а `path` и жизни базы не используются. */
+  /** Цель миссии: с ней враги появляются на вражеских базах (`bases`) и идут на текущую позицию цели, а `path` и жизни базы не используются. */
   objective?: ObjectiveConfig;
-  /** Точки входа врагов (миссии с целью). */
-  spawns?: Vec2[];
+  /** Вражеские базы (миссии с целью): откуда и какие враги идут. */
+  bases?: EnemyBaseConfig[];
   /** Аэродром: клетка на краю карты, откуда взлетают и куда возвращаются авиагруппы. */
   airfield: Vec2;
   baseLives: number;

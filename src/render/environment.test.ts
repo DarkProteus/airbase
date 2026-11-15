@@ -115,7 +115,7 @@ test('дорога: покрывает маршрут/путь и продлен
 
 test('ворота: по одному на точку входа, нос внутрь карты', () => {
   for (const m of all) {
-    const spawns = m.objective ? (m.spawns ?? []) : (m.path ?? []).slice(0, 1);
+    const spawns = m.objective ? (m.bases ?? []).map((b) => b.pos) : (m.path ?? []).slice(0, 1);
     const gates = layoutEnvironment(m).gates;
     expect(gates.map((g) => g.at)).toEqual(spawns);
     const center = { x: (m.size.w - 1) / 2, y: (m.size.h - 1) / 2 };
@@ -155,7 +155,7 @@ test('ядро проверки зазора: объекты миссии зан
   const m = MISSIONS['evac']!;
   expect(clearance(m, m.objective!.type === 'defend' ? m.objective!.pos : { x: 0, y: 0 })).toBeLessThan(0);
   expect(clearance(m, m.airfield)).toBeLessThan(0);
-  expect(clearance(m, m.spawns![0]!)).toBeLessThan(0);
+  expect(clearance(m, m.bases![0]!.pos)).toBeLessThan(0);
 });
 
 test('колонна: поза на маршруте, голова смотрит по ходу, концы продлены', () => {

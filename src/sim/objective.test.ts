@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'vitest';
-import { createSim, OBJECTIVE_REACH, snapshot, step, TICK_RATE } from '.';
-import type { Content, EnemyConfig, MissionConfig, ObjectiveConfig, SimEvent } from '.';
+import { baseNewTypes, baseTypes, createSim, OBJECTIVE_REACH, snapshot, step, TICK_RATE } from '.';
+import type { Content, EnemyConfig, MissionConfig, ObjectiveConfig, SimEvent, EnemyBaseConfig } from '.';
+
+/** База без списка типов: в тестовой миссии выпускает любых врагов. */
+const openBase = (x: number, y: number): EnemyBaseConfig => ({ id: `b${x}-${y}`, name: `B${x}-${y}`, pos: { x, y }, roster: [] });
 
 const enemy = (id: string, over: Partial<EnemyConfig> = {}): EnemyConfig => ({ id, name: id, hp: 100, speed: 5, reward: 1, leakDamage: 2, tags: ['air'], ...over });
 const content: Content = {
@@ -13,19 +16,19 @@ const content: Content = {
 const DEFEND: ObjectiveConfig = { type: 'defend', pos: { x: 10, y: 5 }, hp: 3, duration: 2 };
 const ESCORT: ObjectiveConfig = { type: 'escort', route: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }], hp: 3, speed: 1 };
 
-/** Карта 21×11 без пути: враги появляются в spawns и летят на цель. */
+/** Карта 21×11 без пути: враги появляются на базах и летят на цель. */
 const mission = (objective: ObjectiveConfig, over: Partial<MissionConfig> = {}): MissionConfig => ({
   id: 'm',
   name: 'M',
   size: { w: 21, h: 11 },
   airfield: { x: 0, y: 5 },
   objective,
-  spawns: [{ x: 0, y: 5 }],
+  bases: [openBase(0, 5)],
   baseLives: 5,
   waves: [],
   ...over,
 });
-const wave = (enemyId: string, count = 1, spawn = 0): MissionConfig['waves'] => [{ prep: 0, groups: [{ enemy: enemyId, count, interval: 0.5, spawn }] }];
+const wave = (enemyId: string, count = 1, spawn = 0): MissionConfig['waves'] => [{ prep: 0, groups: [{ enemy: enemyId, count, interval: 0.5, base: spawn }] }];
 const run = (sim: ReturnType<typeof createSim>, ticks: number) => {
   for (let i = 0; i < ticks; i++) step(sim);
 };
@@ -53,8 +56,8 @@ describe('цель в конфиге миссии', () => {
 
   test('некорректный конфиг отклоняется при создании', () => {
     expect(() => createSim(mission(DEFEND, { objective: undefined }), content, 1)).toThrow(/path or an objective/);
-    expect(() => createSim(mission(DEFEND, { waves: wave('fast', 1, 3) }), content, 1)).toThrow(/spawn point 3/);
-    expect(() => createSim(mission(DEFEND, { spawns: undefined, waves: wave('fast') }), content, 1)).toThrow(/spawn point 0/);
+    expect(() => createSim(mission(DEFEND, { waves: wave('fast', 1, 3) }), content, 1)).toThrow(/enemy base 3/);
+    expect(() => createSim(mission(DEFEND, { bases: undefined, waves: wave('fast') }), content, 1)).toThrow(/enemy base 0/);
     expect(() => createSim(mission({ ...DEFEND, hp: 0 }), content, 1)).toThrow(/hp/);
     expect(() => createSim(mission({ ...ESCORT, speed: 0 }), content, 1)).toThrow(/speed/);
     expect(() => createSim(mission({ ...ESCORT, route: [{ x: 0, y: 0 }] }), content, 1)).toThrow();
@@ -83,7 +86,7 @@ describe('defend', () => {
   });
 
   test('враг летит по прямой от точки входа к объекту и достаёт его с OBJECTIVE_REACH', () => {
-    const sim = createSim(mission({ ...DEFEND, duration: 100 }, { spawns: [{ x: 0, y: 5 }], waves: wave('slow') }), content, 1);
+    const sim = createSim(mission({ ...DEFEND, duration: 100 }, { bases: [openBase(0, 5)], waves: wave('slow') }), content, 1);
     run(sim, TICK_RATE);
     const e = sim.state.enemies[0]!;
     expect(e.pos.x).toBeCloseTo(1, 6);
@@ -123,7 +126,7 @@ describe('escort', () => {
   });
 
   test('поражение, когда колонна уничтожена', () => {
-    const sim = createSim(mission(ESCORT, { spawns: [{ x: 4, y: 6 }], waves: wave('fast', 2) }), content, 1);
+    const sim = createSim(mission(ESCORT, { bases: [openBase(4, 6)], waves: wave('fast', 2) }), content, 1);
     play(sim);
     expect(sim.state.status).toBe('lost');
     expect(sim.state.objective!.hp).toBeLessThanOrEqual(0);
@@ -135,7 +138,7 @@ describe('наведение врагов на цель', () => {
   const LONG: ObjectiveConfig = { type: 'escort', route: [{ x: 0, y: 0 }, { x: 20, y: 0 }], hp: 100, speed: 2 };
 
   test('каждый тик враг идёт на текущую позицию цели и меняет курс вслед за колонной', () => {
-    const sim = createSim(mission(LONG, { spawns: [{ x: 10, y: 10 }], waves: wave('slow') }), content, 1);
+    const sim = createSim(mission(LONG, { bases: [openBase(10, 10)], waves: wave('slow') }), content, 1);
     step(sim);
     const headings: number[] = [];
     for (let i = 0; i < 6 * TICK_RATE; i++) {
@@ -157,7 +160,7 @@ describe('наведение врагов на цель', () => {
   });
 
   test('к неподвижной цели курс не меняется', () => {
-    const sim = createSim(mission({ ...DEFEND, duration: 100 }, { spawns: [{ x: 0, y: 0 }], waves: wave('slow') }), content, 1);
+    const sim = createSim(mission({ ...DEFEND, duration: 100 }, { bases: [openBase(0, 0)], waves: wave('slow') }), content, 1);
     run(sim, 2);
     const a = { ...sim.state.enemies[0]!.pos };
     run(sim, 60);
@@ -167,8 +170,8 @@ describe('наведение врагов на цель', () => {
 
   test('стрельба выбирает врага, который ближе к цели', () => {
     const m = mission({ ...DEFEND, duration: 100 }, {
-      spawns: [{ x: 0, y: 5 }, { x: 14, y: 5 }],
-      waves: [{ prep: 0, groups: [{ enemy: 'slow', count: 1, interval: 0, spawn: 0 }, { enemy: 'slow', count: 1, interval: 0, spawn: 1 }] }],
+      bases: [openBase(0, 5), openBase(14, 5)],
+      waves: [{ prep: 0, groups: [{ enemy: 'slow', count: 1, interval: 0, base: 0 }, { enemy: 'slow', count: 1, interval: 0, base: 1 }] }],
     });
     const sim = createSim(m, content, 1, [{ group: 't', level: 0, zone: { x: 5, y: 5 } }]);
     step(sim);
@@ -195,4 +198,59 @@ test('прогон с целью детерминирован по сиду, а 
     return snapshot(sim).enemies;
   };
   expect(mid(3)).not.toEqual(mid(4));
+});
+
+describe('вражеские базы', () => {
+  const GROWING: EnemyBaseConfig = { id: 'g', name: 'G', pos: { x: 0, y: 5 }, roster: [{ enemy: 'slow' }, { enemy: 'fast', fromWave: 2 }] };
+  const LATE: EnemyBaseConfig = { id: 'l', name: 'L', pos: { x: 20, y: 5 }, roster: [{ enemy: 'fast', fromWave: 3 }] };
+  const group = (enemyId: string, base: number) => ({ enemy: enemyId, count: 1, interval: 0, base });
+  const waves = (...groups: ReturnType<typeof group>[][]): MissionConfig['waves'] => groups.map((g) => ({ prep: 0, groups: g }));
+  const LONG: ObjectiveConfig = { ...DEFEND, hp: 1000, duration: 1000 };
+
+  test('набор типов базы растёт по волнам; новые — только с волны из fromWave', () => {
+    expect([1, 2, 3].map((w) => baseTypes(GROWING, w))).toEqual([['slow'], ['slow', 'fast'], ['slow', 'fast']]);
+    expect([1, 2, 3].map((w) => baseTypes(LATE, w))).toEqual([[], [], ['fast']]);
+    // Исходный набор первой волны новым не считается.
+    expect([1, 2, 3].map((w) => baseNewTypes(GROWING, w))).toEqual([[], ['fast'], []]);
+    expect([1, 2, 3].map((w) => baseNewTypes(LATE, w))).toEqual([[], [], ['fast']]);
+  });
+
+  test('враг появляется на позиции своей базы', () => {
+    const sim = createSim(mission(LONG, { bases: [GROWING, LATE], waves: waves([group('slow', 0)], [group('fast', 0)], [group('fast', 1)]) }), content, 1);
+    const at: Record<string, { x: number; y: number }[]> = {};
+    for (let i = 0; i < 200 && sim.state.wave < 3; i++) {
+      step(sim);
+      for (const ev of sim.state.events)
+        if (ev.type === 'spawn') {
+          const e = sim.state.enemies.find((x) => x.id === ev.enemy)!;
+          (at[e.type] ??= []).push({ x: Math.round(e.pos.x), y: Math.round(e.pos.y) });
+        }
+    }
+    expect(at.slow).toEqual([GROWING.pos]);
+    expect(at.fast).toHaveLength(2);
+    expect(at.fast![1]).toEqual(LATE.pos);
+  });
+
+  test('тип вне списка базы или раньше его волны отклоняется при создании', () => {
+    const make = (w: MissionConfig['waves']) => () => createSim(mission(LONG, { bases: [GROWING, LATE], waves: w }), content, 1);
+    expect(make(waves([group('fast', 0)]))).toThrow(/base g does not launch fast in wave 1/);
+    expect(make(waves([group('slow', 0)], [group('fast', 1)]))).toThrow(/base l does not launch fast in wave 2/);
+    expect(make(waves([group('slow', 0)], [group('slow', 1)]))).toThrow(/base l does not launch slow/);
+    expect(make(waves([group('slow', 0)], [group('fast', 0)], [group('fast', 1), group('slow', 0)]))).not.toThrow();
+  });
+
+  test('событие baseUpgrade приходит со стартом волны, открывающей тип, и один раз', () => {
+    const sim = createSim(mission(LONG, { bases: [GROWING, LATE], waves: waves([group('slow', 0)], [group('fast', 0)], [group('fast', 1)]) }), content, 1);
+    const seen: { wave: number; base: number; enemy: string }[] = [];
+    for (let i = 0; i < 400 && sim.state.status === 'running'; i++) {
+      step(sim);
+      for (const ev of sim.state.events) {
+        if (ev.type !== 'baseUpgrade') continue;
+        // В том же тике, что и waveStart этой волны.
+        expect(sim.state.events.some((e) => e.type === 'waveStart')).toBe(true);
+        seen.push({ wave: sim.state.wave, base: ev.base, enemy: ev.enemy });
+      }
+    }
+    expect(seen).toEqual([{ wave: 2, base: 0, enemy: 'fast' }, { wave: 3, base: 1, enemy: 'fast' }]);
+  });
 });

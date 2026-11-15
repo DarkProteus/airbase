@@ -54,8 +54,10 @@ export interface SceneHandle {
   update(state: SimState): void;
   /** Выделить зону группы (GroupState.id); null — снять выделение. */
   setSelectedGroup(group: number | null): void;
-  /** Подсветить точки входа ближайшей волны (с подписью); пустой список — убрать. */
+  /** Подсветить точки входа ближайшей волны (с подписью; пустая подпись — только кольцо); пустой список — убрать. */
   setWarning(points: readonly { at: Vec2; label: string }[]): void;
+  /** Вражеские базы: постоянная подпись и модели типов врагов, которые база уже выпускает. */
+  setBases(bases: readonly { at: Vec2; name: string; types: readonly string[] }[]): void;
   dispose(): void;
 }
 
@@ -293,10 +295,19 @@ export function createScene(
   const warnRingGeo = new RingGeometry(0.55, 0.75, 32).rotateX(-Math.PI / 2);
   const warnMat = new MeshBasicMaterial({ color: COLORS.warning, transparent: true, depthWrite: false });
   let warnRings: Mesh[] = [];
+  let warnKey = '[]';
   let warnLabels: { el: HTMLElement; world: Vector3 }[] = [];
   const labelLayer = document.createElement('div');
   labelLayer.className = 'scene-labels';
   container.appendChild(labelLayer);
+  // Вражеские базы: подписи живут в своём слое (предупреждение о волне свой слой перерисовывает целиком).
+  const baseLayer = document.createElement('div');
+  baseLayer.className = 'scene-labels';
+  container.appendChild(baseLayer);
+  const baseProps = new Group();
+  dynamic.add(baseProps);
+  let baseLabels: { el: HTMLElement; world: Vector3 }[] = [];
+  let baseKey = '';
 
   // Цель миссии (объект или колонна) с полосой прочности; позиция и прочность — из снапшота.
   const HP_W = 1.2;
@@ -488,7 +499,7 @@ export function createScene(
     }
     const pulse = 1 + 0.2 * Math.sin(now / 180);
     for (const r of warnRings) r.scale.set(pulse, 1, pulse);
-    for (const l of warnLabels) {
+    for (const l of [...warnLabels, ...baseLabels]) {
       const v = l.world.clone().project(camera);
       l.el.style.transform = `translate(${((v.x + 1) / 2) * container.clientWidth}px, ${((1 - v.y) / 2) * container.clientHeight}px) translate(-50%, -150%)`;
     }
@@ -835,6 +846,7 @@ export function createScene(
     for (const l of links.values()) l.mat.dispose();
     env.dispose();
     labelLayer.remove();
+    baseLayer.remove();
     planeGeo.dispose();
     warnRingGeo.dispose();
     warnMat.dispose();
@@ -860,8 +872,9 @@ export function createScene(
   };
 
   const setWarning = (points: readonly { at: Vec2; label: string }[]) => {
-    const same = points.length === warnRings.length && points.every((p, i) => warnLabels[i]?.el.textContent === p.label);
-    if (same) return;
+    const key = JSON.stringify(points);
+    if (key === warnKey) return;
+    warnKey = key;
     for (const r of warnRings) dynamic.remove(r);
     labelLayer.replaceChildren();
     warnRings = points.map((p) => {
@@ -872,7 +885,7 @@ export function createScene(
       dynamic.add(ring);
       return ring;
     });
-    warnLabels = points.map((p) => {
+    warnLabels = points.filter((p) => p.label).map((p) => {
       const el = document.createElement('div');
       el.className = 'scene-label';
       el.textContent = p.label;
@@ -882,5 +895,51 @@ export function createScene(
     });
   };
 
-  return { update, setSelectedGroup, setWarning, dispose };
+  /** Доля размера боевой модели у «припаркованного» образца на базе. */
+  const PARKED_SCALE = 0.8;
+  /** Сколько типов было у каждой базы при прошлой отрисовке: рост — повод подсветить подпись. */
+  let baseCounts: number[] = [];
+  const setBases = (bases: readonly { at: Vec2; name: string; types: readonly string[] }[]) => {
+    const key = JSON.stringify(bases);
+    if (key === baseKey) return;
+    baseKey = key;
+    baseProps.clear();
+    baseLayer.replaceChildren();
+    const center = { x: (size.w - 1) / 2, y: (size.h - 1) / 2 };
+    const before = baseCounts;
+    baseCounts = bases.map((b) => b.types.length);
+    baseLabels = bases.map((b, index) => {
+      // Образцы стоят в ряд поперёк направления на центр карты, чуть позади ворот.
+      const d = Math.hypot(center.x - b.at.x, center.y - b.at.y) || 1;
+      const inward = { x: (center.x - b.at.x) / d, y: (center.y - b.at.y) / d };
+      const side = { x: -inward.y, y: inward.x };
+      b.types.forEach((type, i) => {
+        const cfg = content.enemies[type];
+        if (!cfg) return;
+        const body = bodyMesh(cfg);
+        const k = i - (b.types.length - 1) / 2;
+        const at = { x: b.at.x + side.x * k * 0.8 + inward.x * 1.1, y: b.at.y + side.y * k * 0.8 + inward.y * 1.1 };
+        const w = cellToWorld(at, size, 0.05);
+        body.mesh.position.set(w.x, w.y, w.z);
+        body.mesh.scale.setScalar(body.scale * PARKED_SCALE);
+        body.mesh.rotation.y = headingOf(inward.x, inward.y) ?? 0;
+        baseProps.add(body.mesh);
+      });
+      const el = document.createElement('div');
+      // Подпись называет базу и её врагов; база, получившая новый тип, на время подсвечивается.
+      const grown = before[index] !== undefined && b.types.length > before[index]!;
+      el.className = grown ? 'scene-label scene-base is-grown' : 'scene-label scene-base';
+      const title = document.createElement('div');
+      title.textContent = b.name;
+      const roster = document.createElement('div');
+      roster.className = 'scene-base-types';
+      roster.textContent = b.types.map((t) => content.enemies[t]?.name ?? t).join(' · ') || 'пока молчит';
+      el.append(title, roster);
+      baseLayer.appendChild(el);
+      const w = cellToWorld(b.at, size, 1.4);
+      return { el, world: new Vector3(w.x, w.y, w.z) };
+    });
+  };
+
+  return { update, setSelectedGroup, setWarning, setBases, dispose };
 }

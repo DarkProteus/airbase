@@ -4,7 +4,7 @@ import { buildPath, pointAt, type PathData } from './path';
 import { rngNext } from './rng';
 import { auraSources, createGroup, enemySpeed, recallGroup, recallRejection, stepGroups, zoneRejection, type GroupState, type LineupEntry } from './sortie';
 import { createStats, type MatchStats } from './tally';
-import type { Content, MissionConfig, Vec2 } from './types';
+import type { Content, EnemyBaseConfig, MissionConfig, Vec2 } from './types';
 
 export const TICK_RATE = 30;
 export const DT = 1 / TICK_RATE;
@@ -24,6 +24,8 @@ export interface EnemyState {
 
 export type SimEvent =
   | { type: 'waveStart'; wave: number }
+  /** База (индекс в `MissionConfig.bases`) с этой волны выпускает новый тип врагов. */
+  | { type: 'baseUpgrade'; base: number; enemy: string }
   /** Враг появился; from — id погибшего носителя, если враг выпущен им (`EnemyConfig.spawnOnDeath`). */
   | { type: 'spawn'; enemy: number; from?: number }
   /** Враг дошёл: в миссии с целью урон идёт по прочности цели, без цели — по жизням базы. */
@@ -91,18 +93,29 @@ export interface Sim {
   state: SimState;
 }
 
+/** Типы врагов, которые база выпускает к волне с номером `wave` (с 1), в порядке списка. */
+export const baseTypes = (base: EnemyBaseConfig, wave: number): string[] =>
+  base.roster.filter((r) => (r.fromWave ?? 1) <= wave).map((r) => r.enemy);
+
+/** Типы, которые база получает ровно с волны `wave` (с 1); у первой волны новых нет — это исходный набор. */
+export const baseNewTypes = (base: EnemyBaseConfig, wave: number): string[] =>
+  wave <= 1 ? [] : base.roster.filter((r) => (r.fromWave ?? 1) === wave).map((r) => r.enemy);
+
 /** lineup — состав на вылет (группы, уровни, стартовые зоны); покупок групп в бою нет. */
 export function createSim(mission: MissionConfig, content: Content, seed: number, lineup: readonly LineupEntry[] = []): Sim {
   const groups = lineup.map((entry, i) => createGroup(mission, content, entry, i + 1));
   const { objective } = mission;
   if (!objective && !mission.path) throw new Error(`mission needs a path or an objective: ${mission.id}`);
   const path = objective || !mission.path ? undefined : buildPath(mission.path);
-  const waveSpawns = mission.waves.map((wave) => {
+  const waveSpawns = mission.waves.map((wave, waveIndex) => {
     const spawns: { tick: number; enemy: string; at: Vec2 }[] = [];
     for (const g of wave.groups) {
       if (!content.enemies[g.enemy]) throw new Error(`unknown enemy: ${g.enemy}`);
-      const at = path ? path.points[0]! : mission.spawns?.[g.spawn ?? 0];
-      if (!at) throw new Error(`unknown spawn point ${g.spawn ?? 0}: ${mission.id}`);
+      const base = path ? undefined : mission.bases?.[g.base ?? 0];
+      const at = path ? path.points[0]! : base?.pos;
+      if (!at) throw new Error(`unknown enemy base ${g.base ?? 0}: ${mission.id}`);
+      if (base && base.roster.length && !baseTypes(base, waveIndex + 1).includes(g.enemy))
+        throw new Error(`base ${base.id} does not launch ${g.enemy} in wave ${waveIndex + 1}: ${mission.id}`);
       for (let i = 0; i < g.count; i++)
         spawns.push({ tick: Math.round(((g.delay ?? 0) + i * g.interval) * TICK_RATE), enemy: g.enemy, at });
     }
@@ -250,6 +263,10 @@ function advancePhase(sim: Sim): void {
     s.phaseTick = 0;
     s.nextSpawn = 0;
     s.events.push({ type: 'waveStart', wave: s.wave++ });
+    // База растёт: с этой волны (номер s.wave, с 1) у неё новый тип врагов.
+    (sim.mission.bases ?? []).forEach((b, base) => {
+      for (const enemy of baseNewTypes(b, s.wave)) s.events.push({ type: 'baseUpgrade', base, enemy });
+    });
   }
 }
 

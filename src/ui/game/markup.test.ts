@@ -2,10 +2,12 @@ import { describe, expect, test } from 'vitest';
 import { CONTENT, GROUPS, MISSIONS } from '../../content';
 import { createSim, damageEnemy, snapshot, step, TICK_RATE } from '../../sim';
 import type { LineupEntry, MissionConfig, Sim } from '../../sim';
-import { ATTACK_LINGER_TICKS, attackLinks, enemyMarks, groupCanHit, groupTargetKinds, targetKind, waveWarning } from './markup';
+import { ATTACK_LINGER_TICKS, attackLinks, baseMarks, baseUpgradeNotice, enemyMarks, groupCanHit, groupTargetKinds, PATH_ENTRY_NAME, targetKind, waveWarning } from './markup';
 import { groupRows, world } from './selectors';
 
 const evac = MISSIONS.evac!;
+/** Та же миссия, но базы выпускают любых врагов с первой волны — для тестовых волн не по расписанию. */
+const open = (m: MissionConfig): MissionConfig => ({ ...m, bases: m.bases?.map((b) => ({ ...b, roster: [] })) });
 const at = (zone: { x: number; y: number }, group: string): LineupEntry => ({ group, level: 0, zone });
 const run = (sim: Sim, ticks: number) => {
   for (let i = 0; i < ticks; i++) step(sim);
@@ -82,16 +84,17 @@ describe('предупреждение о волне', () => {
     expect(w).toMatchObject({ wave: 1, waves: 4, total: 4 });
     expect(w.seconds).toBeCloseTo(4, 6);
     expect(w.entries).toEqual([
-      { spawn: 0, at: { x: 0, y: 1 }, items: [{ enemy: 'drone', name: 'Дрон', count: 4, kind: 'air', hitBy: ['F-16'] }] },
+      { base: 0, name: evac.bases![0]!.name, at: { x: 0, y: 1 }, items: [{ enemy: 'drone', name: 'Дрон', count: 4, kind: 'air', hitBy: ['F-16'], fresh: false }] },
     ]);
   });
 
   test('волна с несколькими входами: состав по входам, воздух и земля, бить некому — пустой hitBy', () => {
-    const m: MissionConfig = { ...evac, waves: evac.waves.slice(1) };
+    const m: MissionConfig = { ...open(evac), waves: evac.waves.slice(1) };
     const w = warn(m, 0)!;
-    expect(w.entries.map((e) => e.spawn)).toEqual([1, 2]);
-    expect(w.entries[0]!.items).toEqual([{ enemy: 'tank', name: 'Бронетехника', count: 2, kind: 'ground', hitBy: [] }]);
-    expect(w.entries[1]!.at).toEqual(evac.spawns![2]);
+    expect(w.entries.map((e) => e.base)).toEqual([1, 2]);
+    expect(w.entries.map((e) => e.name)).toEqual([evac.bases![1]!.name, evac.bases![2]!.name]);
+    expect(w.entries[0]!.items).toEqual([{ enemy: 'tank', name: 'Бронетехника', count: 2, kind: 'ground', hitBy: [], fresh: false }]);
+    expect(w.entries[1]!.at).toEqual(evac.bases![2]!.pos);
     expect(w.entries[1]!.items[0]).toMatchObject({ enemy: 'drone', count: 4, kind: 'air' });
     expect(w.total).toBe(6);
   });
@@ -105,8 +108,19 @@ describe('предупреждение о волне', () => {
   });
 
   test('миссия с путём: вход — начало пути', () => {
-    const m: MissionConfig = { ...evac, objective: undefined, spawns: undefined, path: [{ x: 0, y: 3 }, { x: 8, y: 3 }] };
-    expect(warn(m, 0)!.entries[0]!.at).toEqual({ x: 0, y: 3 });
+    const m: MissionConfig = { ...evac, objective: undefined, bases: undefined, path: [{ x: 0, y: 3 }, { x: 8, y: 3 }] };
+    expect(warn(m, 0)!.entries[0]).toMatchObject({ at: { x: 0, y: 3 }, name: PATH_ENTRY_NAME });
+    expect(baseMarks(m, createSim(m, CONTENT, 1).state)).toEqual([]);
+  });
+
+  test('тип, который база выпускает впервые с этой волны, помечен как новый', () => {
+    const m: MissionConfig = { ...evac, waves: [evac.waves[0]!, { ...evac.waves[1]!, start: 'clear' }, evac.waves[2]!] };
+    const w = warn(m, 6 * TICK_RATE + 5)!;
+    expect(w.wave).toBe(2);
+    // Со второй волны танковая база открывает бронетехнику, полевой лагерь — дроны.
+    expect(w.entries.map((e) => e.items.map((i) => [i.enemy, i.fresh]))).toEqual([[['tank', true]], [['drone', true]]]);
+    // Первая волна — исходный набор баз, новых типов в ней нет.
+    expect(warn(evac, 0)!.entries.every((e) => e.items.every((i) => !i.fresh))).toBe(true);
   });
 
   test('во время волны с таймерной следующей предупреждения нет; с правилом clear — «после зачистки»', () => {
@@ -178,10 +192,10 @@ describe('кто кого атакует', () => {
 });
 
 describe('малозаметные враги в разметке', () => {
-  const ghostWave: MissionConfig = { ...evac, waves: [{ prep: 2, groups: [{ enemy: 'ghost', count: 1, interval: 0, spawn: 0 }] }] };
+  const ghostWave: MissionConfig = { ...open(evac), waves: [{ prep: 2, groups: [{ enemy: 'ghost', count: 1, interval: 0, base: 0 }] }] };
 
   test('предупреждение: без группы обнаружения в составе малозаметного бить некому, с ДРЛО — есть кому', () => {
-    const zone = evac.spawns![0]!;
+    const zone = evac.bases![0]!.pos;
     const blind = createSim(ghostWave, CONTENT, 1, [at(zone, 'f16'), at(zone, 'a10')]);
     expect(waveWarning(world(ghostWave, CONTENT, blind.state))!.entries[0]!.items[0]!.hitBy).toEqual([]);
     const seeing = createSim(ghostWave, CONTENT, 1, [at(zone, 'f16'), at(zone, 'e3')]);
@@ -189,7 +203,7 @@ describe('малозаметные враги в разметке', () => {
   });
 
   test('метка врага: hidden, пока малозаметный вне зоны патрулирующего ДРЛО', () => {
-    const zone = evac.spawns![0]!;
+    const zone = evac.bases![0]!.pos;
     const sim = createSim(ghostWave, CONTENT, 1, [at(zone, 'f16'), at(zone, 'e3')]);
     while (!sim.state.enemies.length) step(sim);
     const hidden = () => enemyMarks(CONTENT, sim.state)[0]!.hidden;
@@ -202,5 +216,26 @@ describe('малозаметные враги в разметке', () => {
       const inZone = Math.hypot(e.pos.x - awacs.zone.x, e.pos.y - awacs.zone.y) <= 3.5;
       expect(hidden()).toBe(!inZone);
     }
+  });
+});
+
+describe('вражеские базы в разметке', () => {
+  test('метки баз: позиция, название и типы, доступные к ближайшей волне', () => {
+    const state = createSim(evac, CONTENT, 1).state;
+    const types = (wave: number, phase: typeof state.phase) => baseMarks(evac, { ...state, wave, phase }).map((b) => b.types);
+    expect(baseMarks(evac, state).map((b) => [b.name, b.at])).toEqual(evac.bases!.map((b) => [b.name, b.pos]));
+    // Подготовка к первой волне и сама первая волна: только исходный набор.
+    expect(types(0, 'prep')).toEqual([['drone'], [], []]);
+    expect(types(1, 'wave')).toEqual([['drone'], [], []]);
+    // В подготовке показан состав следующей волны.
+    expect(types(1, 'prep')).toEqual([['drone'], ['tank'], ['drone']]);
+    expect(types(4, 'wave')).toEqual([['drone', 'runner'], ['tank'], ['drone', 'runner']]);
+  });
+
+  test('сообщение об улучшении базы называет базу и новый тип врага', () => {
+    expect(baseUpgradeNotice(evac, CONTENT, [{ type: 'waveStart', wave: 1 }])).toBeUndefined();
+    expect(baseUpgradeNotice(evac, CONTENT, [{ type: 'baseUpgrade', base: 1, enemy: 'tank' }, { type: 'baseUpgrade', base: 2, enemy: 'drone' }])).toBe(
+      `${evac.bases![1]!.name}: новый тип — ${CONTENT.enemies.tank!.name} · ${evac.bases![2]!.name}: новый тип — ${CONTENT.enemies.drone!.name}`,
+    );
   });
 });

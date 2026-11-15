@@ -8,17 +8,17 @@ const evac: MissionConfig = {
   airfield: { x: 12, y: 1 },
   objective: { type: 'defend', pos: { x: 5, y: 5 }, hp: 20, duration: 90 },
   reward: { win: 120, loss: 30 },
-  spawns: [
-    { x: 0, y: 1 },
-    { x: 0, y: 9 },
-    { x: 11, y: 10 },
+  bases: [
+    { id: 'uav-north', name: 'Площадка БПЛА', pos: { x: 0, y: 1 }, roster: [{ enemy: 'drone' }, { enemy: 'runner', fromWave: 3 }] },
+    { id: 'armor', name: 'Танковая база', pos: { x: 0, y: 9 }, roster: [{ enemy: 'tank', fromWave: 2 }] },
+    { id: 'uav-south', name: 'Полевой лагерь', pos: { x: 11, y: 10 }, roster: [{ enemy: 'drone', fromWave: 2 }, { enemy: 'runner', fromWave: 4 }] },
   ],
   baseLives: 1,
   waves: [
-    { prep: 6, groups: [{ enemy: 'drone', count: 4, interval: 1.4, spawn: 0 }] },
-    { prep: 10, groups: [{ enemy: 'tank', count: 2, interval: 4, spawn: 1 }, { enemy: 'drone', count: 4, interval: 1.2, spawn: 2, delay: 2 }] },
-    { prep: 12, groups: [{ enemy: 'runner', count: 4, interval: 0.8, spawn: 0 }, { enemy: 'tank', count: 2, interval: 4, spawn: 2 }] },
-    { prep: 12, groups: [{ enemy: 'drone', count: 6, interval: 0.9, spawn: 1 }, { enemy: 'runner', count: 4, interval: 0.7, spawn: 2, delay: 3 }, { enemy: 'tank', count: 3, interval: 4, spawn: 0, delay: 5 }] },
+    { prep: 6, groups: [{ enemy: 'drone', count: 4, interval: 1.4, base: 0 }] },
+    { prep: 10, groups: [{ enemy: 'tank', count: 2, interval: 4, base: 1 }, { enemy: 'drone', count: 4, interval: 1.2, base: 2, delay: 2 }] },
+    { prep: 12, groups: [{ enemy: 'runner', count: 4, interval: 0.8, base: 0 }, { enemy: 'tank', count: 2, interval: 4, base: 1 }] },
+    { prep: 12, groups: [{ enemy: 'drone', count: 6, interval: 0.9, base: 0 }, { enemy: 'runner', count: 4, interval: 0.7, base: 2, delay: 3 }, { enemy: 'tank', count: 3, interval: 4, base: 1, delay: 5 }] },
   ],
 };
 
@@ -42,17 +42,17 @@ const convoy: MissionConfig = {
     speed: 0.25,
   },
   reward: { win: 140, loss: 30 },
-  spawns: [
-    { x: 0, y: 0 },
-    { x: 6, y: 10 },
-    { x: 12, y: 5 },
+  bases: [
+    { id: 'uav', name: 'Площадка БПЛА', pos: { x: 0, y: 0 }, roster: [{ enemy: 'drone' }] },
+    { id: 'armor', name: 'Танковая база', pos: { x: 6, y: 10 }, roster: [{ enemy: 'tank', fromWave: 2 }] },
+    { id: 'scouts', name: 'Аэродром разведчиков', pos: { x: 12, y: 5 }, roster: [{ enemy: 'runner', fromWave: 3 }, { enemy: 'drone', fromWave: 4 }] },
   ],
   baseLives: 1,
   waves: [
-    { prep: 5, groups: [{ enemy: 'drone', count: 5, interval: 1.2, spawn: 0 }] },
-    { prep: 10, groups: [{ enemy: 'tank', count: 2, interval: 3, spawn: 1 }, { enemy: 'drone', count: 4, interval: 1, spawn: 0, delay: 3 }] },
-    { prep: 12, groups: [{ enemy: 'runner', count: 6, interval: 0.6, spawn: 2 }, { enemy: 'tank', count: 2, interval: 3, spawn: 0 }] },
-    { prep: 14, groups: [{ enemy: 'drone', count: 8, interval: 0.7, spawn: 2 }, { enemy: 'tank', count: 3, interval: 2.5, spawn: 1, delay: 2 }] },
+    { prep: 5, groups: [{ enemy: 'drone', count: 5, interval: 1.2, base: 0 }] },
+    { prep: 10, groups: [{ enemy: 'tank', count: 2, interval: 3, base: 1 }, { enemy: 'drone', count: 4, interval: 1, base: 0, delay: 3 }] },
+    { prep: 12, groups: [{ enemy: 'runner', count: 6, interval: 0.6, base: 2 }, { enemy: 'tank', count: 2, interval: 3, base: 1 }] },
+    { prep: 14, groups: [{ enemy: 'drone', count: 8, interval: 0.7, base: 2 }, { enemy: 'tank', count: 3, interval: 2.5, base: 1, delay: 2 }] },
   ],
 };
 
@@ -64,9 +64,9 @@ const radar: MissionConfig = {
   airfield: { x: 5, y: 8 },
   objective: { type: 'defend', pos: { x: 5, y: 3 }, hp: 28, duration: 110 },
   reward: { win: 170, loss: 40 },
-  spawns: [
-    { x: 0, y: 0 },
-    { x: 10, y: 0 },
+  bases: [
+    { id: 'uav', name: 'Площадка БПЛА', pos: { x: 0, y: 0 }, roster: [{ enemy: 'drone' }, { enemy: 'runner', fromWave: 3 }, { enemy: 'ghost', fromWave: 5 }] },
+    { id: 'stealth', name: 'Скрытая площадка', pos: { x: 10, y: 0 }, roster: [{ enemy: 'ghost', fromWave: 2 }] },
   ],
   baseLives: 1,
   /** Кольцом вокруг радара: зоны близко друг к другу, чтобы ауры Growler и ДРЛО накрывали соседей, а малозаметные цели попадали под обнаружение. */
@@ -76,12 +76,12 @@ const radar: MissionConfig = {
     { x: 5, y: 4 },
   ],
   waves: [
-    { prep: 6, groups: [{ enemy: 'drone', count: 4, interval: 1.4, spawn: 0 }] },
-    { prep: 10, groups: [{ enemy: 'ghost', count: 2, interval: 2.5, spawn: 1 }, { enemy: 'drone', count: 4, interval: 1.2, spawn: 0, delay: 2 }] },
-    { prep: 12, groups: [{ enemy: 'ghost', count: 3, interval: 2, spawn: 0 }, { enemy: 'runner', count: 4, interval: 0.8, spawn: 1, delay: 3 }] },
-    { prep: 12, groups: [{ enemy: 'ghost', count: 3, interval: 1.8, spawn: 1 }, { enemy: 'drone', count: 6, interval: 1, spawn: 0, delay: 2 }] },
-    { prep: 14, groups: [{ enemy: 'ghost', count: 3, interval: 1.8, spawn: 0 }, { enemy: 'ghost', count: 2, interval: 2, spawn: 1, delay: 3 }, { enemy: 'runner', count: 4, interval: 0.8, spawn: 0, delay: 5 }] },
-    { prep: 14, groups: [{ enemy: 'ghost', count: 3, interval: 1.8, spawn: 0 }, { enemy: 'ghost', count: 3, interval: 1.8, spawn: 1, delay: 1 }, { enemy: 'drone', count: 6, interval: 1, spawn: 0, delay: 4 }] },
+    { prep: 6, groups: [{ enemy: 'drone', count: 4, interval: 1.4, base: 0 }] },
+    { prep: 10, groups: [{ enemy: 'ghost', count: 2, interval: 2.5, base: 1 }, { enemy: 'drone', count: 4, interval: 1.2, base: 0, delay: 2 }] },
+    { prep: 12, groups: [{ enemy: 'ghost', count: 3, interval: 2, base: 1 }, { enemy: 'runner', count: 4, interval: 0.8, base: 0, delay: 3 }] },
+    { prep: 12, groups: [{ enemy: 'ghost', count: 3, interval: 1.8, base: 1 }, { enemy: 'drone', count: 6, interval: 1, base: 0, delay: 2 }] },
+    { prep: 14, groups: [{ enemy: 'ghost', count: 3, interval: 1.8, base: 0 }, { enemy: 'ghost', count: 2, interval: 2, base: 1, delay: 3 }, { enemy: 'runner', count: 4, interval: 0.8, base: 0, delay: 5 }] },
+    { prep: 14, groups: [{ enemy: 'ghost', count: 3, interval: 1.8, base: 0 }, { enemy: 'ghost', count: 3, interval: 1.8, base: 1, delay: 1 }, { enemy: 'drone', count: 6, interval: 1, base: 0, delay: 4 }] },
   ],
 };
 
@@ -91,13 +91,13 @@ const bastion: MissionConfig = {
   name: 'Укрепрайон',
   size: { w: 17, h: 13 },
   airfield: { x: 0, y: 10 },
-  objective: { type: 'defend', pos: { x: 9, y: 6 }, hp: 44, duration: 150 },
+  objective: { type: 'defend', pos: { x: 9, y: 6 }, hp: 47, duration: 150 },
   reward: { win: 200, loss: 45 },
-  spawns: [
-    { x: 16, y: 0 },
-    { x: 16, y: 12 },
-    { x: 8, y: 0 },
-    { x: 0, y: 2 },
+  bases: [
+    { id: 'armor', name: 'Танковая база', pos: { x: 16, y: 0 }, roster: [{ enemy: 'tank' }] },
+    { id: 'helipad', name: 'Вертолётная площадка', pos: { x: 16, y: 12 }, roster: [{ enemy: 'gunship', fromWave: 2 }] },
+    { id: 'uav', name: 'Площадка БПЛА', pos: { x: 8, y: 0 }, roster: [{ enemy: 'drone', fromWave: 2 }, { enemy: 'runner', fromWave: 4 }] },
+    { id: 'west', name: 'Западный лагерь', pos: { x: 0, y: 2 }, roster: [{ enemy: 'tank', fromWave: 3 }, { enemy: 'gunship', fromWave: 5 }] },
   ],
   baseLives: 1,
   /** Вплотную вокруг объекта: на большой карте четыре входа, и разнесённые зоны не успевают прикрыть цель; ауры накрывают соседей. */
@@ -107,13 +107,13 @@ const bastion: MissionConfig = {
     { x: 8, y: 6 },
   ],
   waves: [
-    { prep: 6, groups: [{ enemy: 'tank', count: 2, interval: 3, spawn: 0 }] },
-    { prep: 12, groups: [{ enemy: 'gunship', count: 1, interval: 3, spawn: 1 }, { enemy: 'drone', count: 5, interval: 1, spawn: 2, delay: 2 }] },
-    { prep: 14, groups: [{ enemy: 'tank', count: 2, interval: 3, spawn: 3 }, { enemy: 'gunship', count: 1, interval: 3, spawn: 0, delay: 4 }] },
-    { prep: 16, groups: [{ enemy: 'gunship', count: 2, interval: 4, spawn: 1 }, { enemy: 'tank', count: 1, interval: 2.5, spawn: 2 }, { enemy: 'runner', count: 5, interval: 0.6, spawn: 3, delay: 4 }] },
-    { prep: 16, groups: [{ enemy: 'tank', count: 2, interval: 3, spawn: 0 }, { enemy: 'gunship', count: 1, interval: 3, spawn: 3, delay: 3 }] },
-    { prep: 16, groups: [{ enemy: 'gunship', count: 2, interval: 4, spawn: 1 }, { enemy: 'drone', count: 8, interval: 0.8, spawn: 2, delay: 1 }, { enemy: 'tank', count: 1, interval: 2, spawn: 3, delay: 3 }] },
-    { prep: 18, groups: [{ enemy: 'gunship', count: 2, interval: 4, spawn: 0 }, { enemy: 'tank', count: 2, interval: 3, spawn: 1, delay: 3 }, { enemy: 'gunship', count: 1, interval: 3, spawn: 3, delay: 8 }] },
+    { prep: 6, groups: [{ enemy: 'tank', count: 2, interval: 3, base: 0 }] },
+    { prep: 12, groups: [{ enemy: 'gunship', count: 1, interval: 3, base: 1 }, { enemy: 'drone', count: 5, interval: 1, base: 2, delay: 2 }] },
+    { prep: 14, groups: [{ enemy: 'tank', count: 2, interval: 3, base: 3 }, { enemy: 'gunship', count: 1, interval: 3, base: 1, delay: 4 }] },
+    { prep: 16, groups: [{ enemy: 'gunship', count: 2, interval: 4, base: 1 }, { enemy: 'tank', count: 1, interval: 2.5, base: 0 }, { enemy: 'runner', count: 5, interval: 0.6, base: 2, delay: 4 }] },
+    { prep: 16, groups: [{ enemy: 'tank', count: 2, interval: 3, base: 0 }, { enemy: 'gunship', count: 1, interval: 3, base: 3, delay: 3 }] },
+    { prep: 16, groups: [{ enemy: 'gunship', count: 2, interval: 4, base: 1 }, { enemy: 'drone', count: 8, interval: 0.8, base: 2, delay: 1 }, { enemy: 'tank', count: 1, interval: 2, base: 3, delay: 3 }] },
+    { prep: 18, groups: [{ enemy: 'gunship', count: 2, interval: 4, base: 3 }, { enemy: 'tank', count: 2, interval: 3, base: 0, delay: 3 }, { enemy: 'gunship', count: 1, interval: 3, base: 1, delay: 8 }] },
   ],
 };
 
@@ -137,14 +137,14 @@ const river: MissionConfig = {
       { x: 10, y: 2 },
       { x: 14, y: 2 },
     ],
-    hp: 32,
+    hp: 38,
     speed: 0.25,
   },
   reward: { win: 190, loss: 40 },
-  spawns: [
-    { x: 0, y: 4 },
-    { x: 4, y: 0 },
-    { x: 14, y: 0 },
+  bases: [
+    { id: 'uav', name: 'Площадка БПЛА', pos: { x: 0, y: 4 }, roster: [{ enemy: 'drone' }, { enemy: 'runner', fromWave: 5 }] },
+    { id: 'armor', name: 'Танковая база', pos: { x: 4, y: 0 }, roster: [{ enemy: 'tank', fromWave: 2 }] },
+    { id: 'east', name: 'Восточная база', pos: { x: 14, y: 0 }, roster: [{ enemy: 'drone', fromWave: 2 }, { enemy: 'runner', fromWave: 3 }, { enemy: 'gunship', fromWave: 5 }] },
   ],
   baseLives: 1,
   /** У головы колонны на первом отрезке маршрута; дальше зоны ведут вслед за ней. */
@@ -154,13 +154,13 @@ const river: MissionConfig = {
     { x: 1, y: 4 },
   ],
   waves: [
-    { prep: 5, groups: [{ enemy: 'drone', count: 4, interval: 1.2, spawn: 0 }] },
-    { prep: 10, groups: [{ enemy: 'tank', count: 2, interval: 3, spawn: 1 }, { enemy: 'drone', count: 3, interval: 1, spawn: 2, delay: 3 }] },
-    { prep: 12, groups: [{ enemy: 'runner', count: 5, interval: 0.6, spawn: 2 }, { enemy: 'tank', count: 2, interval: 3, spawn: 0 }] },
-    { prep: 14, groups: [{ enemy: 'drone', count: 6, interval: 0.8, spawn: 1 }, { enemy: 'tank', count: 2, interval: 2.5, spawn: 0, delay: 2 }] },
-    { prep: 14, groups: [{ enemy: 'gunship', count: 2, interval: 3, spawn: 2 }, { enemy: 'runner', count: 5, interval: 0.6, spawn: 0, delay: 2 }] },
-    { prep: 14, groups: [{ enemy: 'drone', count: 8, interval: 0.7, spawn: 1 }, { enemy: 'tank', count: 3, interval: 2.5, spawn: 2, delay: 2 }] },
-    { prep: 14, groups: [{ enemy: 'gunship', count: 3, interval: 3, spawn: 0 }, { enemy: 'drone', count: 8, interval: 0.7, spawn: 2, delay: 2 }, { enemy: 'tank', count: 2, interval: 3, spawn: 1, delay: 4 }] },
+    { prep: 5, groups: [{ enemy: 'drone', count: 4, interval: 1.2, base: 0 }] },
+    { prep: 10, groups: [{ enemy: 'tank', count: 2, interval: 3, base: 1 }, { enemy: 'drone', count: 3, interval: 1, base: 2, delay: 3 }] },
+    { prep: 12, groups: [{ enemy: 'runner', count: 5, interval: 0.6, base: 2 }, { enemy: 'tank', count: 2, interval: 3, base: 1 }] },
+    { prep: 14, groups: [{ enemy: 'drone', count: 6, interval: 0.8, base: 0 }, { enemy: 'tank', count: 2, interval: 2.5, base: 1, delay: 2 }] },
+    { prep: 14, groups: [{ enemy: 'gunship', count: 2, interval: 3, base: 2 }, { enemy: 'runner', count: 5, interval: 0.6, base: 0, delay: 2 }] },
+    { prep: 14, groups: [{ enemy: 'drone', count: 8, interval: 0.7, base: 0 }, { enemy: 'tank', count: 3, interval: 2.5, base: 1, delay: 2 }] },
+    { prep: 14, groups: [{ enemy: 'gunship', count: 3, interval: 3, base: 2 }, { enemy: 'drone', count: 8, interval: 0.7, base: 2, delay: 2 }, { enemy: 'tank', count: 2, interval: 3, base: 1, delay: 4 }] },
   ],
 };
 
@@ -188,12 +188,12 @@ const pass: MissionConfig = {
     speed: 0.3,
   },
   reward: { win: 240, loss: 50 },
-  spawns: [
-    { x: 0, y: 0 },
-    { x: 9, y: 0 },
-    { x: 18, y: 7 },
-    { x: 9, y: 14 },
-    { x: 0, y: 6 },
+  bases: [
+    { id: 'uav', name: 'Площадка БПЛА', pos: { x: 0, y: 0 }, roster: [{ enemy: 'drone' }, { enemy: 'ghost', fromWave: 7 }] },
+    { id: 'carriers', name: 'Авиабаза носителей', pos: { x: 9, y: 0 }, roster: [{ enemy: 'carrier', fromWave: 2 }, { enemy: 'bomber', fromWave: 8 }] },
+    { id: 'stealth', name: 'Скрытая площадка', pos: { x: 18, y: 7 }, roster: [{ enemy: 'ghost', fromWave: 3 }, { enemy: 'runner', fromWave: 7 }] },
+    { id: 'uav-south', name: 'Южная площадка БПЛА', pos: { x: 9, y: 14 }, roster: [{ enemy: 'drone', fromWave: 3 }, { enemy: 'carrier', fromWave: 8 }] },
+    { id: 'scouts', name: 'Аэродром разведчиков', pos: { x: 0, y: 6 }, roster: [{ enemy: 'runner', fromWave: 2 }, { enemy: 'drone', fromWave: 7 }] },
   ],
   baseLives: 1,
   /** У головы колонны на первом отрезке маршрута; дальше зоны ведут вслед за ней. */
@@ -203,14 +203,14 @@ const pass: MissionConfig = {
     { x: 2, y: 10 },
   ],
   waves: [
-    { prep: 5, groups: [{ enemy: 'drone', count: 5, interval: 1.2, spawn: 0 }] },
-    { prep: 10, groups: [{ enemy: 'carrier', count: 1, interval: 1, spawn: 1 }, { enemy: 'runner', count: 4, interval: 0.7, spawn: 4, delay: 2 }] },
-    { prep: 12, groups: [{ enemy: 'ghost', count: 2, interval: 2, spawn: 2 }, { enemy: 'drone', count: 5, interval: 1, spawn: 3, delay: 2 }] },
-    { prep: 14, groups: [{ enemy: 'carrier', count: 1, interval: 1, spawn: 0 }, { enemy: 'drone', count: 6, interval: 0.8, spawn: 3, delay: 2 }] },
-    { prep: 14, groups: [{ enemy: 'ghost', count: 2, interval: 2, spawn: 1 }, { enemy: 'runner', count: 6, interval: 0.6, spawn: 4, delay: 2 }] },
-    { prep: 14, groups: [{ enemy: 'carrier', count: 1, interval: 1, spawn: 2 }, { enemy: 'drone', count: 6, interval: 0.8, spawn: 3, delay: 3 }, { enemy: 'runner', count: 4, interval: 0.6, spawn: 4, delay: 4 }] },
-    { prep: 16, groups: [{ enemy: 'ghost', count: 3, interval: 1.6, spawn: 0 }, { enemy: 'drone', count: 8, interval: 0.7, spawn: 4, delay: 3 }, { enemy: 'runner', count: 5, interval: 0.6, spawn: 2, delay: 5 }] },
-    { prep: 18, groups: [{ enemy: 'bomber', count: 1, interval: 1, spawn: 1 }, { enemy: 'carrier', count: 1, interval: 1, spawn: 3, delay: 4 }, { enemy: 'drone', count: 6, interval: 0.8, spawn: 0, delay: 5 }] },
+    { prep: 5, groups: [{ enemy: 'drone', count: 5, interval: 1.2, base: 0 }] },
+    { prep: 10, groups: [{ enemy: 'carrier', count: 1, interval: 1, base: 1 }, { enemy: 'runner', count: 4, interval: 0.7, base: 4, delay: 2 }] },
+    { prep: 12, groups: [{ enemy: 'ghost', count: 2, interval: 2, base: 2 }, { enemy: 'drone', count: 5, interval: 1, base: 3, delay: 2 }] },
+    { prep: 14, groups: [{ enemy: 'carrier', count: 1, interval: 1, base: 1 }, { enemy: 'drone', count: 6, interval: 0.8, base: 3, delay: 2 }] },
+    { prep: 14, groups: [{ enemy: 'ghost', count: 2, interval: 2, base: 2 }, { enemy: 'runner', count: 6, interval: 0.6, base: 4, delay: 2 }] },
+    { prep: 14, groups: [{ enemy: 'carrier', count: 1, interval: 1, base: 1 }, { enemy: 'drone', count: 6, interval: 0.8, base: 3, delay: 3 }, { enemy: 'runner', count: 4, interval: 0.6, base: 4, delay: 4 }] },
+    { prep: 16, groups: [{ enemy: 'ghost', count: 3, interval: 1.6, base: 0 }, { enemy: 'drone', count: 8, interval: 0.7, base: 4, delay: 3 }, { enemy: 'runner', count: 5, interval: 0.6, base: 2, delay: 5 }] },
+    { prep: 18, groups: [{ enemy: 'bomber', count: 1, interval: 1, base: 1 }, { enemy: 'carrier', count: 1, interval: 1, base: 3, delay: 4 }, { enemy: 'drone', count: 6, interval: 0.8, base: 0, delay: 5 }] },
   ],
 };
 

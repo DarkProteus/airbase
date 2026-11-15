@@ -238,8 +238,8 @@ export function layoutAirfield(mission: MissionConfig): AirfieldLayout {
 function layoutCore(mission: MissionConfig): Core {
   const road = roadPolyline(mission);
   const center: Vec2 = { x: (mission.size.w - 1) / 2, y: (mission.size.h - 1) / 2 };
-  // Точки входа: spawns миссии с целью или начало пути.
-  const spawns = mission.objective ? (mission.spawns ?? []) : (mission.path ?? []).slice(0, 1);
+  // Точки входа: вражеские базы миссии с целью или начало пути.
+  const spawns = mission.objective ? (mission.bases ?? []).map((b) => b.pos) : (mission.path ?? []).slice(0, 1);
   const gates = spawns.map((s): Placed => ({ at: s, heading: headingOf(center.x - s.x, center.y - s.y) ?? 0 }));
   const path = mission.path ?? [];
   const building = mission.objective ? (mission.objective.type === 'defend' ? mission.objective.pos : undefined) : path[path.length - 1];

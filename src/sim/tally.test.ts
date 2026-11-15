@@ -65,11 +65,12 @@ describe('статистика матча', () => {
     expect(sum(a.stats.groups.map((g) => g.damage))).toBeGreaterThan(0);
   });
 
-  // победа с группами, поражение со слабым составом, поражение вовсе без групп
+  // победа с группами, поражение при неудачных зонах и со слабым составом, поражение вовсе без групп
   const cases: [string, string[], boolean, 'won' | 'lost'][] = [
-    ['convoy', ['f16', 'a10', 'c130'], true, 'won'],
+    ['convoy', ['f16', 'a10', 'c130'], false, 'won'],
     ['evac', ['f16', 'a10', 'growler'], true, 'won'],
-    ['convoy', ['f16', 'a10', 'c130'], false, 'lost'],
+    // Все зоны точно на колонне, без выноса навстречу врагам: этого составу не хватает.
+    ['convoy', ['f16', 'a10', 'c130'], true, 'lost'],
     ['evac', ['f16'], false, 'lost'],
     ['evac', [], false, 'lost'],
   ];

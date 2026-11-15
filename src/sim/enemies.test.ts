@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'vitest';
 import { CONTENT, ENEMIES, GROUPS } from '../content';
 import { ARMOR_MIN_SHARE, armoredDamage, createSim, damageEnemy, enemyDetected, step, TICK_RATE } from '.';
-import type { Content, EnemyConfig, LineupEntry, MissionConfig, Sim, SimEvent, SortiePhase } from '.';
+import type { Content, EnemyConfig, LineupEntry, MissionConfig, Sim, SimEvent, SortiePhase, EnemyBaseConfig } from '.';
+
+/** База без списка типов: в тестовой миссии выпускает любых врагов. */
+const openBase = (x: number, y: number): EnemyBaseConfig => ({ id: `b${x}-${y}`, name: `B${x}-${y}`, pos: { x, y }, roster: [] });
 
 /** Свойства врагов (броня, малозаметность, носитель) — общие поля конфига; здесь они проверяются на своих мишенях. */
 const base = { name: 'T', hp: 1e6, speed: 0.01, reward: 5, leakDamage: 0 };
@@ -20,7 +23,7 @@ const mission = (targets: string[], objective = false): MissionConfig => ({
   size: { w: 41, h: 11 },
   airfield: { x: 0, y: 0 },
   ...(objective
-    ? { spawns: [{ x: 4, y: 5 }], objective: { type: 'defend' as const, pos: { x: 30, y: 5 }, hp: 50, duration: 600 } }
+    ? { bases: [openBase(4, 5)], objective: { type: 'defend' as const, pos: { x: 30, y: 5 }, hp: 50, duration: 600 } }
     : { path: [{ x: 0, y: 5 }, { x: 40, y: 5 }] }),
   baseLives: 99,
   waves: [{ prep: 0, groups: targets.map((enemy) => ({ enemy, count: 1, interval: 0 })) }],

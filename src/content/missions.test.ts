@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { createSim, inMap, onMapEdge, profileLineup, snapshot, step, TICK_RATE, zoneRejection } from '../sim';
+import { baseTypes, createSim, inMap, onMapEdge, profileLineup, snapshot, step, TICK_RATE, zoneRejection } from '../sim';
 import type { MissionConfig } from '../sim';
 import { CONTENT, DEFAULT_LINEUP, DEFAULT_ZONES, ENEMIES, GROUPS, LINEUP_SIZE, MISSIONS } from '.';
 
@@ -24,7 +24,7 @@ describe('миссии с целью (headless)', () => {
 
   test.each(withObjective)('$id: точки входа, цель и маршрут лежат на карте', (m) => {
     const o = m.objective!;
-    const cells = [...m.spawns!, ...(o.type === 'escort' ? o.route : [o.pos])];
+    const cells = [...m.bases!.map((b) => b.pos), ...(o.type === 'escort' ? o.route : [o.pos])];
     for (const c of cells) expect(inMap(m.size, c)).toBe(true);
   });
 
@@ -61,7 +61,7 @@ describe('набор из шести миссий', () => {
     // Края карты разные: аэродромы лежат не на одном и том же краю.
     const edges = new Set(created.map((m) => (m.airfield.x === 0 ? 'left' : m.airfield.x === m.size.w - 1 ? 'right' : m.airfield.y === 0 ? 'top' : 'bottom')));
     expect(edges.size).toBeGreaterThanOrEqual(3);
-    const counts = created.map((m) => m.spawns!.length);
+    const counts = created.map((m) => m.bases!.length);
     expect(Math.min(...counts)).toBeGreaterThanOrEqual(2);
     expect(Math.max(...counts)).toBeLessThanOrEqual(5);
     expect(new Set(counts).size).toBeGreaterThanOrEqual(3);
@@ -91,7 +91,7 @@ describe('набор из шести миссий', () => {
       for (const w of m.waves)
         for (const g of w.groups) {
           expect(ENEMIES[g.enemy], `${m.id}: ${g.enemy}`).toBeDefined();
-          expect(g.spawn ?? 0, m.id).toBeLessThan(m.spawns!.length);
+          expect(g.base ?? 0, m.id).toBeLessThan(m.bases!.length);
         }
   });
 
@@ -111,9 +111,61 @@ describe('набор из шести миссий', () => {
     for (const m of created) {
       const o = m.objective!;
       const start = o.type === 'escort' ? o.route[0]! : o.pos;
-      for (const s of m.spawns!) expect(sameCells(s, start), m.id).toBe(false);
-      expect(m.spawns!.some((s) => sameCells(s, m.airfield)), m.id).toBe(false);
+      for (const s of m.bases!.map((b) => b.pos)) expect(sameCells(s, start), m.id).toBe(false);
+      expect(m.bases!.some((b) => sameCells(b.pos, m.airfield)), m.id).toBe(false);
     }
+  });
+});
+
+describe('вражеские базы', () => {
+  const all = Object.values(MISSIONS);
+
+  test.each(all)('$id: у каждой базы свой id, своё название и непустой список типов из реестра врагов', (m) => {
+    const bases = m.bases!;
+    expect(bases.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(bases.map((b) => b.id)).size).toBe(bases.length);
+    expect(new Set(bases.map((b) => b.name)).size).toBe(bases.length);
+    for (const b of bases) {
+      expect(b.name.trim(), b.id).not.toBe('');
+      expect(b.roster.length, b.id).toBeGreaterThan(0);
+      expect(new Set(b.roster.map((r) => r.enemy)).size, b.id).toBe(b.roster.length);
+      for (const r of b.roster) {
+        expect(ENEMIES[r.enemy], `${b.id}: ${r.enemy}`).toBeDefined();
+        expect(r.fromWave ?? 1, b.id).toBeGreaterThanOrEqual(1);
+        expect(r.fromWave ?? 1, b.id).toBeLessThanOrEqual(m.waves.length);
+      }
+    }
+  });
+
+  test.each(all)('$id: каждая группа волны идёт с базы, у которой её тип к этой волне уже доступен', (m) => {
+    m.waves.forEach((w, i) => {
+      for (const g of w.groups) expect(baseTypes(m.bases![g.base ?? 0]!, i + 1), `${m.id}, волна ${i + 1}: ${g.enemy}`).toContain(g.enemy);
+    });
+  });
+
+  test.each(all)('$id: тип появляется в бою в той же волне, с которой он открыт у базы, — сигнал об улучшении не ложный', (m) => {
+    m.bases!.forEach((b, base) => {
+      for (const r of b.roster) {
+        const wave = m.waves[(r.fromWave ?? 1) - 1]!;
+        expect(wave.groups.some((g) => (g.base ?? 0) === base && g.enemy === r.enemy), `${m.id}/${b.id}: ${r.enemy}`).toBe(true);
+      }
+    });
+  });
+
+  test.each(all)('$id: базы растут — хотя бы одна получает новый тип после первой волны', (m) => {
+    expect(m.bases!.some((b) => b.roster.some((r) => (r.fromWave ?? 1) > 1))).toBe(true);
+  });
+
+  test('конфиг с врагом не со своей базы отвергается', () => {
+    const evac = MISSIONS.evac!;
+    const tankBase = evac.bases!.findIndex((b) => b.roster.every((r) => r.enemy === 'tank'));
+    expect(tankBase).toBeGreaterThanOrEqual(0);
+    const last = evac.waves.length - 1;
+    const broken: MissionConfig = { ...evac, waves: evac.waves.map((w, i) => (i === last ? { ...w, groups: [...w.groups, { enemy: 'drone', count: 1, interval: 1, base: tankBase }] } : w)) };
+    expect(() => createSim(broken, CONTENT, 1)).toThrow(/does not launch drone/);
+    // И слишком рано: танки с первой волны, хотя база открывает их со второй.
+    const early: MissionConfig = { ...evac, waves: [{ prep: 1, groups: [{ enemy: 'tank', count: 1, interval: 1, base: tankBase }] }] };
+    expect(() => createSim(early, CONTENT, 1)).toThrow(/does not launch tank in wave 1/);
   });
 });
 
@@ -154,7 +206,7 @@ describe('стартовые зоны патруля', () => {
   test.each(created)('$id: зоны не стоят на клетке аэродрома и входа', (m) => {
     for (const z of m.zones!) {
       expect(sameCells(z, m.airfield), m.id).toBe(false);
-      for (const s of m.spawns!) expect(sameCells(z, s), m.id).toBe(false);
+      for (const s of m.bases!.map((b) => b.pos)) expect(sameCells(z, s), m.id).toBe(false);
     }
   });
 });

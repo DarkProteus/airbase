@@ -4,14 +4,14 @@ import { createScene } from '../../render';
 import { useGameStore } from '../../store/game';
 import { startGame } from './driver';
 import { GroupPanel } from './GroupPanel';
-import { waveWarning } from './markup';
-import { entryLabel, WaveWarning } from './WaveWarning';
+import { baseMarks, baseUpgradeNotice, waveWarning } from './markup';
+import { WaveWarning } from './WaveWarning';
 import { groupRows, recallCommand, REJECT_TEXT, rejectionNotice, world, zoneClick } from './selectors';
 import type { LineupEntry, MissionConfig, SimState } from '../../sim';
 
-/** Точки входа ближайшей волны для подсветки на карте (пусто, если волна не ожидается). */
+/** Базы ближайшей волны для подсветки на карте (пусто, если волна не ожидается). У баз подпись постоянная, кольцу своя не нужна. */
 const warningPoints = (mission: MissionConfig, state: SimState) =>
-  (waveWarning(world(mission, CONTENT, state))?.entries ?? []).map((e) => ({ at: e.at, label: entryLabel(e.spawn) }));
+  (waveWarning(world(mission, CONTENT, state))?.entries ?? []).map((e) => ({ at: e.at, label: mission.objective ? '' : e.name }));
 
 /** Холст карты и панель авиагрупп; `lineup` держать стабильным (смена `mission`/`lineup`/`seed` перезапускает бой). Игра мутируется только командами sim через драйвер. */
 export function GameView({ mission, lineup, seed }: { mission: MissionConfig; lineup: readonly LineupEntry[]; seed: number }) {
@@ -41,6 +41,7 @@ export function GameView({ mission, lineup, seed }: { mission: MissionConfig; li
     const first = useGameStore.getState().snapshot;
     if (first) {
       scene.update(first);
+      scene.setBases(baseMarks(mission, first));
       scene.setWarning(warningPoints(mission, first));
     }
     scene.setSelectedGroup(useGameStore.getState().selectedGroup);
@@ -48,8 +49,9 @@ export function GameView({ mission, lineup, seed }: { mission: MissionConfig; li
       if (s.selectedGroup !== prev.selectedGroup) scene.setSelectedGroup(s.selectedGroup);
       if (!s.snapshot || s.snapshot === prev.snapshot) return;
       scene.update(s.snapshot);
+      scene.setBases(baseMarks(mission, s.snapshot));
       scene.setWarning(warningPoints(mission, s.snapshot));
-      const text = rejectionNotice(s.snapshot.events);
+      const text = rejectionNotice(s.snapshot.events) ?? baseUpgradeNotice(mission, CONTENT, s.snapshot.events);
       if (text) setNotice(text);
     });
     const onKey = (e: KeyboardEvent) => {

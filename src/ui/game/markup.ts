@@ -1,4 +1,4 @@
-import { enemyDetected, everyModifier, TICK_RATE, weaponHits } from '../../sim';
+import { baseNewTypes, baseTypes, enemyDetected, everyModifier, TICK_RATE, weaponHits } from '../../sim';
 import type { AirGroupConfig, Content, MissionConfig, SimState, Vec2, World } from '../../sim';
 
 /**
@@ -81,11 +81,15 @@ export interface WarningItem {
   kind: TargetKind | undefined;
   /** Названия групп состава, способных бить этого врага; пусто — бить некому. */
   hitBy: string[];
+  /** База выпускает этот тип впервые — с этой волны. */
+  fresh: boolean;
 }
 
 export interface WarningEntry {
-  /** Индекс точки входа из `MissionConfig.spawns` (с 0). */
-  spawn: number;
+  /** Индекс вражеской базы из `MissionConfig.bases` (с 0); у миссии с путём — 0. */
+  base: number;
+  /** Название базы; у миссии с путём — «Вход». */
+  name: string;
   at: Vec2;
   items: WarningItem[];
 }
@@ -100,8 +104,32 @@ export interface WaveWarning {
   entries: WarningEntry[];
 }
 
-/** Точка входа волновой группы: у миссии с путём — начало пути, иначе `spawns[spawn]`. */
-const spawnPoint = (m: MissionConfig, spawn: number): Vec2 | undefined => (m.objective ? m.spawns?.[spawn] : m.path?.[0]);
+/** Название точки входа у миссии с путём (без вражеских баз). */
+export const PATH_ENTRY_NAME = 'Вход';
+
+/** Вражеские базы на карте к ближайшей волне: где стоят, как называются и какие типы врагов уже выпускают. */
+export interface BaseMark {
+  at: Vec2;
+  name: string;
+  /** id типов врагов в порядке появления у базы. */
+  types: string[];
+}
+
+/** Номер волны (с 1), к которой показывать состав баз: идущая, а в подготовке — следующая. */
+const shownWave = (m: MissionConfig, s: SimState): number => Math.max(1, Math.min(m.waves.length, s.wave + (s.phase === 'prep' ? 1 : 0)));
+
+export const baseMarks = (m: MissionConfig, s: SimState): BaseMark[] =>
+  (m.objective ? (m.bases ?? []) : []).map((b) => ({ at: { ...b.pos }, name: b.name, types: baseTypes(b, shownWave(m, s)) }));
+
+/** Сообщения об улучшении баз по событиям тика: «<база>: новый тип — <враг>». */
+export function baseUpgradeNotice(m: MissionConfig, content: Content, events: readonly SimState['events'][number][]): string | undefined {
+  const lines = events.flatMap((e) => {
+    if (e.type !== 'baseUpgrade') return [];
+    const base = m.bases?.[e.base];
+    return base ? [`${base.name}: новый тип — ${content.enemies[e.enemy]?.name ?? e.enemy}`] : [];
+  });
+  return lines.length ? lines.join(' · ') : undefined;
+}
 
 /**
  * Предупреждение о следующей волне: отсчёт подготовки (phase prep) или ожидание зачистки
@@ -125,17 +153,18 @@ export function waveWarning(w: World): WaveWarning | null {
   const bySpawn = new Map<number, WarningEntry>();
   let total = 0;
   for (const g of next.groups) {
-    const idx = mission.objective ? (g.spawn ?? 0) : 0;
-    const at = spawnPoint(mission, idx);
+    const idx = mission.objective ? (g.base ?? 0) : 0;
+    const base = mission.objective ? mission.bases?.[idx] : undefined;
+    const at = mission.objective ? base?.pos : mission.path?.[0];
     const cfg = content.enemies[g.enemy];
     if (!at || !cfg) continue;
     let entry = bySpawn.get(idx);
-    if (!entry) bySpawn.set(idx, (entry = { spawn: idx, at: { ...at }, items: [] }));
+    if (!entry) bySpawn.set(idx, (entry = { base: idx, name: base?.name ?? PATH_ENTRY_NAME, at: { ...at }, items: [] }));
     const item = entry.items.find((i) => i.enemy === g.enemy);
     if (item) item.count += g.count;
-    else entry.items.push({ enemy: g.enemy, name: cfg.name, count: g.count, kind: targetKind(cfg.tags), hitBy: hitters(cfg.tags, cfg.stealth) });
+    else entry.items.push({ enemy: g.enemy, name: cfg.name, count: g.count, kind: targetKind(cfg.tags), hitBy: hitters(cfg.tags, cfg.stealth), fresh: !!base && baseNewTypes(base, s.wave + 1).includes(g.enemy) });
     total += g.count;
   }
-  const entries = [...bySpawn.values()].sort((a, b) => a.spawn - b.spawn);
+  const entries = [...bySpawn.values()].sort((a, b) => a.base - b.base);
   return { wave: s.wave + 1, waves: mission.waves.length, seconds, total, entries };
 }
