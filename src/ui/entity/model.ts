@@ -1,5 +1,5 @@
 import { auraMods, configStats, invested, maxLevel, nextUpgradeCost, ownModifiers } from '../../sim';
-import type { AirGroupConfig, AuraSource, GroupStats, Modifier, VisualConfig, VisualShape } from '../../sim';
+import type { AirGroupConfig, AuraSource, GroupStats, ModelConfig, Modifier, VisualConfig, VisualShape } from '../../sim';
 
 /** Чистая логика отображения сущностей: без React, без three. Строится только из конфигов. */
 
@@ -130,6 +130,8 @@ export const DEFAULT_ALTITUDE = 0.9;
 
 export interface Visual {
   shape: PreviewShape;
+  /** Составная модель из конфига; нет — рисуется примитив shape. */
+  model?: ModelConfig;
   /** Цвет '#rrggbb' — годится и для CSS, и для THREE.Color. */
   color: string;
   /** Парит над землёй (altitude > 0). */
@@ -173,7 +175,7 @@ export function visualOf(entity: { role?: string; tags: readonly string[]; visua
   const tags = [...entity.tags].sort();
   const v = entity.visual;
   const altitude = Math.max(0, v?.altitude ?? (tags.includes('air') ? DEFAULT_ALTITUDE : 0));
-  if (v) return { shape: v.shape, color: v.color, flying: altitude > 0, altitude, size: v.scale ?? 1 };
+  if (v) return { shape: v.shape, ...(v.model ? { model: v.model } : {}), color: v.color, flying: altitude > 0, altitude, size: v.scale ?? 1 };
   const key = entity.role ?? tags.join('+');
   const h = hashString(key);
   const th = hashString(tags.join('+'));

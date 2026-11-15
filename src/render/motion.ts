@@ -26,3 +26,18 @@ export function retarget(prev: Tween | undefined, to: number, now: number, durat
 export function tweenDuration(ticks: number, dtSeconds: number): number {
   return Math.max(0, ticks) * dtSeconds * 1000;
 }
+
+/**
+ * Курс по смещению в клетках: угол поворота вокруг вертикали для модели с носом по локальной +X
+ * (клетка x -> мир x, клетка y -> мир z). null — смещение слишком мало, курс не меняется.
+ */
+export function headingOf(dx: number, dy: number, eps = 1e-4): number | null {
+  return Math.hypot(dx, dy) < eps ? null : Math.atan2(-dy, dx);
+}
+
+/** Поворот от cur к target по кратчайшей дуге не больше чем на maxStep радиан. */
+export function turnToward(cur: number, target: number, maxStep: number): number {
+  const TAU = Math.PI * 2;
+  const d = ((((target - cur + Math.PI) % TAU) + TAU) % TAU) - Math.PI;
+  return Math.abs(d) <= maxStep ? target : cur + Math.sign(d) * maxStep;
+}

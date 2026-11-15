@@ -32,9 +32,39 @@ export interface Modifier {
 /** Примитив модели: рендерер и превью галереи строят одну и ту же форму. */
 export type VisualShape = 'cube' | 'cylinder' | 'pyramid' | 'sphere';
 
+/** Форма детали составной модели. Единичный размер 1×1×1; у цилиндра и конуса ось — локальная Y. */
+export type ModelPartShape = 'box' | 'cylinder' | 'cone' | 'sphere';
+
+/** Тройка по осям модели: X — вперёд (нос), Y — вверх, Z — вправо. */
+export type Triple = [number, number, number];
+
+/** Деталь составной модели: простая форма со смещением, поворотом, размером и цветом. */
+export interface ModelPart {
+  shape: ModelPartShape;
+  /** Габариты детали по её локальным осям, клетки. */
+  size: Triple;
+  /** Смещение центра детали от начала модели, клетки; по умолчанию 0. */
+  offset?: Triple;
+  /** Поворот вокруг осей X, Y, Z в градусах (порядок XYZ); по умолчанию 0. */
+  rotation?: Triple;
+  /** Цвет '#rrggbb'; по умолчанию — цвет сущности (`VisualConfig.color`). */
+  color?: string;
+  /** Число граней у цилиндра, конуса и сферы (низкополи); по умолчанию 8. */
+  segments?: number;
+}
+
+/** Составная низкополи-модель как данные: сцена и превью карточек строят её из одного описания. */
+export interface ModelConfig {
+  id: string;
+  parts: ModelPart[];
+}
+
 /** Визуал сущности как данные. Симуляция его не читает. */
 export interface VisualConfig {
+  /** Примитив: рисуется, если составной модели нет (и в превью без WebGL). */
   shape: VisualShape;
+  /** Составная модель из реестра контента (`MODELS`); нет — рисуется примитив `shape`. */
+  model?: ModelConfig;
   /** Цвет '#rrggbb' — понимают и CSS, и three.Color. */
   color: string;
   /** Относительный размер, 1 = обычный. */

@@ -16,3 +16,9 @@ test('src/sim не импортирует three/react/zustand и слои render
   const bad = sim.filter((f) => FORBIDDEN.test(readFileSync(f, 'utf8')));
   expect(bad).toEqual([]);
 });
+
+test('sim не читает облик: visual и модели встречаются только в типах', () => {
+  const sim = files('src/sim').filter((f) => !f.endsWith('.test.ts') && !f.endsWith('types.ts'));
+  const bad = sim.filter((f) => /\bvisual\b|\bModel(Config|Part)\b/.test(readFileSync(f, 'utf8')));
+  expect(bad).toEqual([]);
+});

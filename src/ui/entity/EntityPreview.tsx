@@ -1,4 +1,5 @@
 import type { VisualConfig } from '../../sim';
+import { modelPreview } from '../../render/preview';
 import { visualOf } from './model';
 import type { Visual } from './model';
 
@@ -54,10 +55,16 @@ function Body({ v }: { v: Visual }) {
   }
 }
 
+/** Сторона картинки составной модели в единицах viewBox при размере 1. */
+const MODEL_SIDE = 150;
+
 /** Превью сущности из конфига (visual): форма, цвет, масштаб и высота полёта те же, что в сцене. */
 export function EntityPreview({ entity, size = 128 }: Props) {
   const v = visualOf(entity);
   const lift = v.altitude * 24;
+  // Составная модель — картинка той же сборки, что в бою; без WebGL остаётся примитив.
+  const image = v.model ? modelPreview(v.model, v.color) : null;
+  const side = MODEL_SIDE * v.size;
   return (
     <svg
       width={size}
@@ -66,11 +73,12 @@ export function EntityPreview({ entity, size = 128 }: Props) {
       role="img"
       aria-label={`${v.shape} ${v.flying ? 'air' : 'ground'}`}
       data-shape={v.shape}
+      data-model={image ? v.model?.id : undefined}
       data-flying={v.flying}
     >
       <ellipse cx={0} cy={22} rx={26 * v.size} ry={9 * v.size} fill="#000" opacity={v.flying ? 0.2 : 0.35} />
       <g transform={`translate(0 ${-lift + 8})`}>
-        <Body v={v} />
+        {image ? <image href={image} x={-side / 2} y={-side / 2 - 4} width={side} height={side} /> : <Body v={v} />}
       </g>
     </svg>
   );

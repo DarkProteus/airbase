@@ -1,4 +1,5 @@
 import type { AirGroupConfig } from '../sim';
+import { MODELS } from './models';
 
 /** Истребитель: быстрый, бьёт только воздушные цели. */
 const f16: AirGroupConfig = {
@@ -19,7 +20,7 @@ const f16: AirGroupConfig = {
     { cost: 80, modifiers: [{ stat: 'damage', op: 'mul', value: 1.3, scope: 'self' }] },
     { cost: 140, modifiers: [{ stat: 'ammo', op: 'add', value: 16, scope: 'self' }] },
   ],
-  visual: { shape: 'pyramid', color: '#4f9de8', scale: 1.1 },
+  visual: { shape: 'pyramid', model: MODELS.jet, color: '#4f9de8', scale: 1.1 },
 };
 
 /** Штурмовик: медленнее, бьёт только наземные цели тяжёлыми выстрелами. */

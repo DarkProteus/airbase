@@ -22,7 +22,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
-import type { Material } from 'three';
+import type { Material, Object3D } from 'three';
 import { visualOf } from '../ui/entity/model';
 import { attackLinks, enemyMarks, targetKind } from '../ui/game/markup';
 import type { EnemyMark, TargetKind } from '../ui/game/markup';
@@ -33,7 +33,8 @@ import { cellToWorld, fitView, ISO_FORWARD, pickCell } from './coords';
 import type { IsoView } from './coords';
 import { dyingScale, effectProgress, EFFECT_COLORS, planEffects, recoilScale } from './effects';
 import type { EffectSpec, Vec3 } from './effects';
-import { retarget, tweenDuration, tweenValue } from './motion';
+import { buildModel } from './model';
+import { headingOf, retarget, turnToward, tweenDuration, tweenValue } from './motion';
 import type { Tween } from './motion';
 
 /**
@@ -80,6 +81,8 @@ const BAR_W = 0.85;
 const BAR_H = 0.12;
 
 const CAMERA_DISTANCE = 40;
+/** Скорость доворота сущности на курс, рад/с. */
+const TURN_RATE = 6;
 
 function shapeGeometry(shape: PreviewShape): BufferGeometry {
   switch (shape) {
@@ -184,17 +187,25 @@ export function createScene(
   const matCache = new Map<string, Material>();
   const bodyMesh = (entity: { role?: string; tags: readonly string[]; visual?: VisualConfig }) => {
     const v = visualOf(entity);
+    if (v.model) {
+      const model: Object3D = buildModel(v.model, v.color);
+      model.scale.setScalar(v.size);
+      return { mesh: model, lift: v.altitude, scale: v.size };
+    }
     let geo = geoCache.get(v.shape);
     if (!geo) geoCache.set(v.shape, (geo = shapeGeometry(v.shape)));
     let mat = matCache.get(v.color);
     if (!mat) matCache.set(v.color, (mat = new MeshLambertMaterial({ color: new Color(v.color) })));
-    const m = new Mesh(geo, mat);
+    const m: Object3D = new Mesh(geo, mat);
     m.scale.setScalar(v.size);
     return { mesh: m, lift: v.altitude, scale: v.size };
   };
 
   interface EnemyEntry {
-    mesh: Mesh;
+    mesh: Object3D;
+    /** Курс: показанный и целевой угол вокруг вертикали (нос модели — по движению). */
+    heading: number;
+    headingTo: number;
     lift: number;
     scale: number;
     x: Tween;
@@ -209,12 +220,14 @@ export function createScene(
     fillMat: MeshBasicMaterial;
   }
   interface Dying {
-    mesh: Mesh;
+    mesh: Object3D;
     scale: number;
     start: number;
   }
   interface GroupEntry {
-    mesh: Mesh;
+    mesh: Object3D;
+    heading: number;
+    headingTo: number;
     scale: number;
     /** Момент последнего выстрела — для импульса отдачи. */
     recoilStart: number;
@@ -367,11 +380,16 @@ export function createScene(
   };
 
   /** Анимации по времени: движение врагов и групп, отдача групп при выстреле, гибель, эффекты. */
+  let lastAnimate = -1;
   const animate = (now: number) => {
+    // Доворот на курс: не быстрее TURN_RATE, чтобы смена направления не была рывком.
+    const turn = lastAnimate < 0 ? Infinity : (Math.max(0, now - lastAnimate) / 1000) * TURN_RATE;
+    lastAnimate = now;
     placeGoal(now);
     for (const e of enemies.values()) {
       const p = enemyWorld(e, now);
       e.mesh.position.set(p.x, p.y, p.z);
+      e.mesh.rotation.y = e.heading = turnToward(e.heading, e.headingTo, turn);
       e.bar.root.position.set(p.x, p.y + 0.8 * e.scale + 0.3, p.z);
     }
     for (const l of linkSpecs) {
@@ -389,6 +407,7 @@ export function createScene(
     for (const g of groups.values()) {
       const p = groupWorld(g, now);
       g.mesh.position.set(p.x, p.y, p.z);
+      g.mesh.rotation.y = g.heading = turnToward(g.heading, g.headingTo, turn);
       const k = effectProgress(g.recoilStart, RECOIL_MS, now);
       g.mesh.scale.setScalar(g.scale * (k === null ? 1 : recoilScale(k)));
     }
@@ -468,11 +487,15 @@ export function createScene(
         dynamic.add(mesh);
         const bar = makeBar(cfg && targetKind(cfg.tags));
         dynamic.add(bar.root);
-        entry = { mesh, lift, scale, bar, x: retarget(undefined, e.pos.x, now, 0), y: retarget(undefined, e.pos.y, now, 0) };
+        // Курс при появлении: к цели миссии (или к базе), дальше — по фактическому движению.
+        const to = state.objective?.pos ?? last ?? e.pos;
+        const heading = headingOf(to.x - e.pos.x, to.y - e.pos.y) ?? 0;
+        entry = { mesh, lift, scale, bar, heading, headingTo: heading, x: retarget(undefined, e.pos.x, now, 0), y: retarget(undefined, e.pos.y, now, 0) };
         enemies.set(e.id, entry);
       } else if (isNew) {
         entry.x = retarget(entry.x, e.pos.x, now, duration);
         entry.y = retarget(entry.y, e.pos.y, now, duration);
+        entry.headingTo = headingOf(entry.x.to - entry.x.from, entry.y.to - entry.y.from) ?? entry.headingTo;
       }
     }
 
@@ -507,6 +530,8 @@ export function createScene(
         entry = {
           mesh,
           scale,
+          heading: 0,
+          headingTo: 0,
           recoilStart: -1e9,
           lift,
           x: retarget(undefined, g.pos.x, now, 0),
@@ -523,6 +548,7 @@ export function createScene(
       } else if (isNew) {
         entry.x = retarget(entry.x, g.pos.x, now, duration);
         entry.y = retarget(entry.y, g.pos.y, now, duration);
+        entry.headingTo = headingOf(entry.x.to - entry.x.from, entry.y.to - entry.y.from) ?? entry.headingTo;
         entry.onGround = onGround;
       }
       // Радиус с аурами союзников (например, ДРЛО) — тот же расчёт, что в sim.
