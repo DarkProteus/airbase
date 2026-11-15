@@ -1,11 +1,11 @@
 ---
 id: TASK-20
 title: Деплой на GitHub Pages через GitHub Actions
-status: To Do
+status: In Progress
 assignee:
   - '@sonnet'
 created_date: '2026-11-13T07:51:00Z'
-updated_date: '2026-11-13T07:53:00Z'
+updated_date: '2026-11-15T04:41:00Z'
 labels:
   - size-S
   - tooling
@@ -27,10 +27,16 @@ ordinal: 19000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `base` в `vite.config.ts` задан так, что production-сборка работает под подпутём репозитория на Pages, а `npm run dev` по-прежнему открывается с корня
+- [x] #1 `base` в `vite.config.ts` задан так, что production-сборка работает под подпутём репозитория на Pages, а `npm run dev` по-прежнему открывается с корня
 - [ ] #2 Workflow GitHub Actions при пуше в `main` собирает проект и публикует его на GitHub Pages; есть ручной запуск (`workflow_dispatch`)
 - [ ] #3 Деплой не публикуется, если `npm run check` падает
 - [ ] #4 Игра открывается по URL Pages: ассеты грузятся без 404, в консоли нет ошибок
 - [ ] #5 Галерея открывается на Pages по прямой ссылке и после перезагрузки страницы (без 404), локальный адрес галереи в dev продолжает работать
-- [ ] #6 URL опубликованной игры и галереи записан в README или `docs/`
+- [x] #6 URL опубликованной игры и галереи записан в README или `docs/`
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Локальная часть готова: base=/airbase/ только при vite build; галерея — вторая HTML-точка входа gallery/index.html + чистая isGalleryPath (src/ui/route.ts), попадает в prod отдельным чанком; workflow .github/workflows/pages.yml (push main + workflow_dispatch, npm ci → check → build → upload, deploy needs build); README с URL. Проверено на локальном эквиваленте Pages (статика под /airbase/ без SPA-fallback, headless Chromium): игра и галерея открываются по прямой ссылке и после перезагрузки, 404 только favicon.ico. НЕ проверено: запуск workflow и реальный URL — нужен пуш и включение Pages (Source: GitHub Actions); репозиторий приватный, на Free Pages для приватных недоступны. Критерии 2–5 открыты до первого деплоя, задача остаётся In Progress.
+<!-- SECTION:NOTES:END -->

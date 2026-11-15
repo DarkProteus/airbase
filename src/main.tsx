@@ -1,12 +1,13 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './ui/App';
+import { isGalleryPath } from './ui/route';
 
 const root = createRoot(document.getElementById('root')!);
 
 async function mount() {
-  // Dev-галерея: только в dev-сборке (в prod ветка вырезается), отдельно от игры.
-  if (import.meta.env.DEV && location.pathname.replace(/\/+$/, '') === '/gallery') {
+  // Галерея — отдельный чанк, грузится только на своём пути (с учётом base).
+  if (isGalleryPath(location.pathname, import.meta.env.BASE_URL)) {
     const { GalleryPage } = await import('./ui/gallery/GalleryPage');
     root.render(
       <StrictMode>
