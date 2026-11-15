@@ -4,12 +4,12 @@ import { create } from 'zustand';
 interface GalleryState {
   /** Уровень улучшения по id группы. */
   levels: Record<string, number>;
-  /** Включённые «что-если» модификаторы (ключи пула). */
-  activeModifiers: string[];
+  /** Включённые «что-если» источники аур (id групп). */
+  activeSources: string[];
   /** Дополнительные теги, добавленные всем превью. */
   activeTags: string[];
   setLevel: (groupId: string, level: number) => void;
-  toggleModifier: (key: string) => void;
+  toggleSource: (groupId: string) => void;
   toggleTag: (tag: string) => void;
   reset: () => void;
 }
@@ -18,10 +18,10 @@ const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter((x
 
 export const useGalleryStore = create<GalleryState>((set) => ({
   levels: {},
-  activeModifiers: [],
+  activeSources: [],
   activeTags: [],
   setLevel: (groupId, level) => set((s) => ({ levels: { ...s.levels, [groupId]: level } })),
-  toggleModifier: (key) => set((s) => ({ activeModifiers: toggle(s.activeModifiers, key) })),
+  toggleSource: (id) => set((s) => ({ activeSources: toggle(s.activeSources, id) })),
   toggleTag: (tag) => set((s) => ({ activeTags: toggle(s.activeTags, tag) })),
-  reset: () => set({ levels: {}, activeModifiers: [], activeTags: [] }),
+  reset: () => set({ levels: {}, activeSources: [], activeTags: [] }),
 }));

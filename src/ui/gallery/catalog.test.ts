@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { ENEMIES, GROUPS } from '../../content';
 import type { AirGroupConfig, EnemyConfig } from '../../sim';
-import { collectTags, listEnemies, listGroups, modifierPool } from './catalog';
+import { collectTags, listEnemies, listAuraSources, listGroups } from './catalog';
 
 test('галерея перечисляет ровно то, что в реестрах контента', () => {
   expect(listGroups().map((u) => u.id)).toEqual(Object.values(GROUPS).map((u) => u.id));
@@ -34,12 +34,18 @@ test('новый конфиг в реестре появляется в гале
   expect(listEnemies(reg)).toEqual([enemy]);
   expect(listGroups(reg)).toEqual([group]);
   expect(collectTags(reg)).toEqual(['mod-tag', 'target-tag', 'zz-tag']);
-  expect(modifierPool(reg).map((p) => p.key)).toEqual(['uu/base/0', 'uu/up1/0']);
+  expect(listAuraSources(reg)).toEqual([group]);
+  expect(listAuraSources({ ...reg, groups: { uu: { ...group, auras: [] } } })).toEqual([]);
 });
 
-test('теги и пул модификаторов собираются из реестров', () => {
+test('источники аур «что-если» — группы реестра с не-self модификаторами', () => {
+  const isAura = (u: AirGroupConfig) => [...u.auras, ...u.upgrades.flatMap((g) => g.modifiers)].some((m) => m.scope !== 'self');
+  const ids = listAuraSources().map((u) => u.id);
+  expect(ids).toEqual(listGroups().filter(isAura).map((u) => u.id));
+  expect(ids.length).toBeGreaterThan(0);
+});
+
+test('теги собираются из реестров', () => {
   const tags = collectTags();
   for (const e of [...listGroups(), ...listEnemies()]) for (const t of e.tags) expect(tags).toContain(t);
-  const total = listGroups().reduce((s, u) => s + u.auras.length + u.upgrades.reduce((a, g) => a + g.modifiers.length, 0), 0);
-  expect(modifierPool()).toHaveLength(total);
 });

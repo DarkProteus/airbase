@@ -1,5 +1,6 @@
 import { ENEMIES, GROUPS } from '../../content';
-import type { AirGroupConfig, EnemyConfig, Modifier } from '../../sim';
+import { ownModifiers } from '../../sim';
+import type { AirGroupConfig, EnemyConfig } from '../../sim';
 
 /** Что показывает галерея: ровно содержимое реестров контента. */
 export interface Registries {
@@ -28,19 +29,7 @@ export function collectTags(reg: Registries = CONTENT_REGISTRIES): string[] {
   return [...tags].sort();
 }
 
-export interface PoolModifier {
-  /** Стабильный ключ: groupId/источник/индекс. */
-  key: string;
-  label: string;
-  modifier: Modifier;
-}
-
-/** Пул модификаторов из реестра, которые можно включать как «что-если». */
-export function modifierPool(reg: Registries = CONTENT_REGISTRIES): PoolModifier[] {
-  return listGroups(reg).flatMap((u) => [
-    ...u.auras.map((modifier, i) => ({ key: `${u.id}/base/${i}`, label: `${u.name}: постоянный`, modifier })),
-    ...u.upgrades.flatMap((g, lv) =>
-      g.modifiers.map((modifier, i) => ({ key: `${u.id}/up${lv + 1}/${i}`, label: `${u.name}: ур. ${lv + 1}`, modifier })),
-    ),
-  ]);
+/** Группы-источники аур для «что-если»: хотя бы один не-self модификатор (в конфиге или улучшениях). */
+export function listAuraSources(reg: Registries = CONTENT_REGISTRIES): AirGroupConfig[] {
+  return listGroups(reg).filter((g) => ownModifiers(g, g.upgrades.length).some((m) => m.scope !== 'self'));
 }

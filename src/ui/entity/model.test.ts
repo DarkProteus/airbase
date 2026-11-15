@@ -1,8 +1,8 @@
-import { expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import type { AirGroupConfig, Modifier } from '../../sim';
 import { configStats } from '../../sim';
 import { ENEMIES, GROUPS } from '../../content';
-import { describeFields, hslToHex, viewGroup, visualOf } from './model';
+import { describeFields, hslToHex, viewGroup, viewGroupWhatIf, visualOf, whatIfAuras } from './model';
 
 const aura: Modifier = { stat: 'damage', op: 'add', value: 5, scope: 'aura', tags: ['air'] };
 
@@ -111,4 +111,50 @@ test('весь контент задаёт visual явно: корректный
   }
   const sigs = all.map((c) => `${c.visual!.shape}/${c.visual!.color}`);
   expect(new Set(sigs).size).toBe(all.length);
+});
+
+describe('«что-если»: ауры других групп', () => {
+  const support: AirGroupConfig = {
+    ...group,
+    id: 's',
+    tags: ['ew'],
+    weapons: [],
+    auras: [
+      { stat: 'damage', op: 'mul', value: 2, scope: 'aura', tags: ['strike'] },
+      { stat: 'fuel', op: 'add', value: 10, scope: 'aura', tags: ['strike'], radius: 1 },
+      { stat: 'speed', op: 'mul', value: 0.5, scope: 'aura', side: 'enemy' },
+      { stat: 'range', op: 'add', value: 1, scope: 'self' },
+    ],
+    upgrades: [{ cost: 1, modifiers: [{ stat: 'ammo', op: 'add', value: 3, scope: 'global', tags: ['strike'] }] }],
+  };
+  const striker: AirGroupConfig = { ...group, id: 'k', tags: ['air', 'strike'] };
+  const sources = (level: number) => [{ group: support, level }];
+
+  test('ауры отбираются так же, как в sim: сторона, scope, теги; своя аура на владельца не действует', () => {
+    const mods = whatIfAuras(striker, striker.tags, sources(0));
+    expect(mods.map((m) => m.stat)).toEqual(['damage', 'fuel']);
+    expect(whatIfAuras(group, group.tags, sources(0))).toEqual([]);
+    expect(whatIfAuras(support, support.tags, sources(1))).toEqual([]);
+    expect(whatIfAuras(striker, striker.tags, [])).toEqual([]);
+  });
+
+  test('уровень источника добавляет ауры его улучшений', () => {
+    expect(whatIfAuras(striker, striker.tags, sources(1)).map((m) => m.stat)).toEqual(['damage', 'fuel', 'ammo']);
+  });
+
+  test('карточка показывает «было» (own) и «стало» (stats); без источников они равны', () => {
+    const v = viewGroupWhatIf(striker, 0, sources(1));
+    expect(v.own).toEqual(configStats(striker, 0));
+    expect(v.stats.weapons[0]!.damage).toBe(20);
+    expect(v.own.weapons[0]!.damage).toBe(10);
+    expect(v.stats.fuel).toBe(30);
+    expect(v.stats.ammo).toBe(7);
+    const plain = viewGroupWhatIf(striker, 0, []);
+    expect(plain.stats).toEqual(plain.own);
+  });
+
+  test('дополнительный тег песочницы делает группу целью ауры', () => {
+    expect(viewGroupWhatIf(group, 0, sources(0)).stats).toEqual(configStats(group, 0));
+    expect(viewGroupWhatIf(group, 0, sources(0), ['strike']).stats.weapons[0]!.damage).toBe(20);
+  });
 });

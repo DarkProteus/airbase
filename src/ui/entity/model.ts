@@ -1,5 +1,5 @@
-import { configStats, invested, maxLevel, nextUpgradeCost, ownModifiers } from '../../sim';
-import type { AirGroupConfig, GroupStats, Modifier, VisualConfig, VisualShape } from '../../sim';
+import { auraMods, configStats, invested, maxLevel, nextUpgradeCost, ownModifiers } from '../../sim';
+import type { AirGroupConfig, AuraSource, GroupStats, Modifier, VisualConfig, VisualShape } from '../../sim';
 
 /** Чистая логика отображения сущностей: без React, без three. Строится только из конфигов. */
 
@@ -45,6 +45,8 @@ export interface GroupView {
   tags: string[];
   /** Параметры уровня 0 без внешних модификаторов — точка отсчёта для подсветки изменений. */
   baseStats: GroupStats;
+  /** Параметры этого уровня без внешних аур — «было» для «что-если». */
+  own: GroupStats;
   stats: GroupStats;
   /** Суммарная стоимость: покупка + улучшения до level. */
   totalCost: number;
@@ -73,11 +75,45 @@ export function viewGroup(
     maxLevel: maxLevel(group),
     tags,
     baseStats: configStats(group, 0),
+    own: configStats(group, lv),
     stats: configStats(group, lv, external),
     totalCost: invested(group, lv),
     nextUpgradeCost: nextUpgradeCost(group, lv),
     appliedModifiers: [...ownModifiers(group, lv), ...external],
   };
+}
+
+/** Группа-источник аур для «что-если»: конфиг и уровень, на котором она патрулирует. */
+export interface WhatIfSource {
+  group: AirGroupConfig;
+  level: number;
+}
+
+/**
+ * Ауры источников, действующие на группу `target`: то же правило, что в sim (auraMods) —
+ * сторона, scope, теги цели, своя аура на владельца не действует. Цель считается стоящей в зоне каждого источника.
+ */
+export function whatIfAuras(target: AirGroupConfig, tags: readonly string[], sources: readonly WhatIfSource[]): Modifier[] {
+  const origin = { x: 0, y: 0 };
+  const src: AuraSource[] = sources.map(({ group, level }, id) => ({
+    id,
+    zone: origin,
+    radius: configStats(group, clampLevel(group, level)).zoneRadius,
+    mods: ownModifiers(group, clampLevel(group, level)).filter((m) => m.scope !== 'self'),
+  }));
+  const self = sources.findIndex((s) => s.group.id === target.id);
+  return auraMods(src, 'ally', origin, tags, self < 0 ? undefined : self);
+}
+
+/** Карточка группы в песочнице: уровень, теги и ауры включённых источников «что-если». */
+export function viewGroupWhatIf(
+  group: AirGroupConfig,
+  level: number,
+  sources: readonly WhatIfSource[],
+  extraTags: readonly string[] = [],
+): GroupView {
+  const tags = [...new Set([...group.tags, ...extraTags])];
+  return viewGroup(group, level, whatIfAuras(group, tags, sources), extraTags);
 }
 
 export function formatModifier(m: Modifier): string {

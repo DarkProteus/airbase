@@ -130,7 +130,7 @@ export function auraSources(w: AuraWorld): AuraSource[] {
 }
 
 /** Модификаторы источников, достающие цель в точке `pos` с тегами `tags`; `except` — id группы-цели (своя аура на владельца не действует). */
-function auraMods(sources: readonly AuraSource[], side: 'ally' | 'enemy', pos: Vec2, tags: readonly string[], except?: number): Modifier[] {
+export function auraMods(sources: readonly AuraSource[], side: 'ally' | 'enemy', pos: Vec2, tags: readonly string[], except?: number): Modifier[] {
   const out: Modifier[] = [];
   for (const src of sources) {
     if (src.id === except) continue;
