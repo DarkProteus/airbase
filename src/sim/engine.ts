@@ -24,7 +24,8 @@ export interface EnemyState {
 
 export type SimEvent =
   | { type: 'waveStart'; wave: number }
-  | { type: 'spawn'; enemy: number }
+  /** Враг появился; from — id погибшего носителя, если враг выпущен им (`EnemyConfig.spawnOnDeath`). */
+  | { type: 'spawn'; enemy: number; from?: number }
   /** Враг дошёл: в миссии с целью урон идёт по прочности цели, без цели — по жизням базы. */
   | { type: 'leak'; enemy: number; damage: number }
   | { type: 'kill'; enemy: number; reward: number }
@@ -151,26 +152,64 @@ function applyCommand(sim: Sim, cmd: Command): void {
   }
 }
 
+/** Наименьшая доля урона попадания, проходящая сквозь любую броню. */
+export const ARMOR_MIN_SHARE = 0.1;
+
+/** Урон одного попадания по броне: теряет `armor`, но не опускается ниже ARMOR_MIN_SHARE от исходного. */
+export const armoredDamage = (amount: number, armor = 0): number =>
+  armor > 0 ? Math.max(amount - armor, amount * ARMOR_MIN_SHARE) : amount;
+
+/** Шаг разлёта врагов, выпущенных носителем: по кругу (миссия с целью) или назад по пути, клеток. */
+const BROOD_SPREAD = 0.35;
+
+/** Новый враг в состоянии матча: разброс скорости из RNG, счётчик волны, событие spawn. */
+function addEnemy(sim: Sim, type: string, wave: number, at: Vec2, dist = 0, from?: number): void {
+  const s = sim.state;
+  const cfg = sim.content.enemies[type]!;
+  const jitter = cfg.speedVar ? 1 + (rngNext(s) * 2 - 1) * cfg.speedVar : 1;
+  const id = s.nextId++;
+  s.stats.waves[wave]!.spawned++;
+  s.enemies.push({ id, type: cfg.id, wave, hp: cfg.hp, speed: cfg.speed * jitter, dist, pos: { ...at } });
+  s.events.push(from === undefined ? { type: 'spawn', enemy: id } : { type: 'spawn', enemy: id, from });
+}
+
 /**
- * Наносит урон врагу; при гибели начисляет награду. Возвращает true, если враг убит.
- * `by` — id группы-стрелка: ей в статистику идёт фактический урон (не больше остатка здоровья) и убийство.
+ * Наносит урон врагу (с учётом его брони); при гибели начисляет награду и выпускает врагов носителя.
+ * Возвращает true, если враг убит.
+ * `by` — id группы-стрелка: ей в статистику идёт фактический урон (после брони, не больше остатка здоровья) и убийство.
  */
 export function damageEnemy(sim: Sim, enemyId: number, amount: number, by?: number): boolean {
   const s = sim.state;
   const i = s.enemies.findIndex((e) => e.id === enemyId);
   const e = s.enemies[i];
   if (!e) return false;
+  const cfg = sim.content.enemies[e.type]!;
+  const dealt = armoredDamage(amount, cfg.armor);
   const shooter = by === undefined ? undefined : s.stats.groups.find((g) => g.id === by);
-  if (shooter) shooter.damage += Math.max(0, Math.min(amount, e.hp));
-  e.hp -= amount;
+  if (shooter) shooter.damage += Math.max(0, Math.min(dealt, e.hp));
+  e.hp -= dealt;
   if (e.hp > 0) return false;
   if (shooter) shooter.kills++;
   s.stats.waves[e.wave]!.killed++;
-  const reward = sim.content.enemies[e.type]!.reward;
+  const reward = cfg.reward;
   s.enemies.splice(i, 1);
   s.money += reward;
   s.kills++;
   s.events.push({ type: 'kill', enemy: e.id, reward });
+  const brood = cfg.spawnOnDeath;
+  if (brood && sim.content.enemies[brood.enemy]) {
+    for (let k = 0; k < brood.count; k++) {
+      if (sim.path) {
+        // Миссия с путём: выпущенные враги встают цепочкой позади места гибели.
+        const d = Math.max(0, e.dist - k * BROOD_SPREAD);
+        addEnemy(sim, brood.enemy, e.wave, pointAt(sim.path, d), d, e.id);
+      } else {
+        const a = (2 * Math.PI * k) / brood.count;
+        const at = { x: e.pos.x + Math.cos(a) * BROOD_SPREAD, y: e.pos.y + Math.sin(a) * BROOD_SPREAD };
+        addEnemy(sim, brood.enemy, e.wave, at, e.dist, e.id);
+      }
+    }
+  }
   return true;
 }
 
@@ -215,12 +254,7 @@ export function step(sim: Sim, commands: readonly Command[] = []): void {
 
   const spawns = sim.waveSpawns[s.wave - 1] ?? [];
   for (let sp = s.phase === 'wave' ? spawns[s.nextSpawn] : undefined; sp && sp.tick <= s.phaseTick; sp = spawns[++s.nextSpawn]) {
-    const cfg = sim.content.enemies[sp.enemy]!;
-    const jitter = cfg.speedVar ? 1 + (rngNext(s) * 2 - 1) * cfg.speedVar : 1;
-    const id = s.nextId++;
-    s.stats.waves[s.wave - 1]!.spawned++;
-    s.enemies.push({ id, type: cfg.id, wave: s.wave - 1, hp: cfg.hp, speed: cfg.speed * jitter, dist: 0, pos: { ...sp.at } });
-    s.events.push({ type: 'spawn', enemy: id });
+    addEnemy(sim, sp.enemy, s.wave - 1, sp.at);
   }
 
   stepGroups(sim);

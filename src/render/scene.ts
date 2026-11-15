@@ -277,7 +277,8 @@ export function createScene(
     b.fill.position.x = -(BAR_W * (1 - m.ratio)) / 2;
     b.fillMat.color.set(m.ratio > 0.35 ? COLORS.hpFull : COLORS.hpLow);
     // Выбрана группа — враги, которых она не может бить, тускнеют.
-    for (const x of b.mats) x.opacity = m.hittable === false ? 0.3 : 1;
+    // Необнаруженный малозаметный враг тоже тусклый: его сейчас не атакует никто.
+    for (const x of b.mats) x.opacity = m.hittable === false || m.hidden ? 0.3 : 1;
   };
   const removeBar = (b: Bar) => {
     dynamic.remove(b.root);

@@ -36,7 +36,7 @@ const a10: AirGroupConfig = {
   takeoffTime: 2,
   rearmTime: 6,
   zoneRadius: 2.5,
-  weapons: [{ damage: 45, fireRate: 1.2, targetTags: ['ground'], shot: 'missile' }],
+  weapons: [{ damage: 45, fireRate: 1.2, targetTags: ['ground', 'low'], shot: 'missile' }],
   auras: [],
   upgrades: [
     { cost: 90, modifiers: [{ stat: 'damage', op: 'mul', value: 1.3, scope: 'self' }] },
@@ -101,7 +101,11 @@ const e3: AirGroupConfig = {
   rearmTime: 7,
   zoneRadius: 3.5,
   weapons: [],
-  auras: [{ stat: 'range', op: 'add', value: 2.5, scope: 'aura' }],
+  auras: [
+    { stat: 'range', op: 'add', value: 2.5, scope: 'aura' },
+    // Обнаружение: малозаметные враги в зоне ДРЛО становятся мишенями для всех групп.
+    { stat: 'detect', op: 'add', value: 1, side: 'enemy', scope: 'aura' },
+  ],
   upgrades: [
     { cost: 100, modifiers: [{ stat: 'range', op: 'add', value: 0.5, scope: 'self' }] },
     { cost: 150, modifiers: [{ stat: 'range', op: 'add', value: 0.5, scope: 'aura' }] },

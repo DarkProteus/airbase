@@ -176,3 +176,31 @@ describe('кто кого атакует', () => {
     expect(seen).toBe(true);
   });
 });
+
+describe('малозаметные враги в разметке', () => {
+  const ghostWave: MissionConfig = { ...evac, waves: [{ prep: 2, groups: [{ enemy: 'ghost', count: 1, interval: 0, spawn: 0 }] }] };
+
+  test('предупреждение: без группы обнаружения в составе малозаметного бить некому, с ДРЛО — есть кому', () => {
+    const zone = evac.spawns![0]!;
+    const blind = createSim(ghostWave, CONTENT, 1, [at(zone, 'f16'), at(zone, 'a10')]);
+    expect(waveWarning(world(ghostWave, CONTENT, blind.state))!.entries[0]!.items[0]!.hitBy).toEqual([]);
+    const seeing = createSim(ghostWave, CONTENT, 1, [at(zone, 'f16'), at(zone, 'e3')]);
+    expect(waveWarning(world(ghostWave, CONTENT, seeing.state))!.entries[0]!.items[0]!.hitBy).toEqual([GROUPS.f16!.name]);
+  });
+
+  test('метка врага: hidden, пока малозаметный вне зоны патрулирующего ДРЛО', () => {
+    const zone = evac.spawns![0]!;
+    const sim = createSim(ghostWave, CONTENT, 1, [at(zone, 'f16'), at(zone, 'e3')]);
+    while (!sim.state.enemies.length) step(sim);
+    const hidden = () => enemyMarks(CONTENT, sim.state)[0]!.hidden;
+    const awacs = sim.state.groups.find((g) => g.type === 'e3')!;
+    expect(awacs.phase).not.toBe('patrol');
+    expect(hidden()).toBe(true);
+    for (let i = 0; i < 3000 && awacs.phase !== 'patrol' && sim.state.enemies.length; i++) step(sim);
+    if (sim.state.enemies.length && awacs.phase === 'patrol') {
+      const e = sim.state.enemies[0]!;
+      const inZone = Math.hypot(e.pos.x - awacs.zone.x, e.pos.y - awacs.zone.y) <= 3.5;
+      expect(hidden()).toBe(!inZone);
+    }
+  });
+});

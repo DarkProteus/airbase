@@ -8,7 +8,8 @@ export interface Vec2 {
  * damage/fireRate — оружие, income — бонус к награде за завершённый вылет.
  * speed с side: 'enemy' — множитель скорости врага.
  */
-export type StatKey = 'damage' | 'range' | 'fireRate' | 'income' | 'speed' | 'fuel' | 'ammo' | 'rearmTime';
+/** detect — обнаружение: вражеская аура с detect > 0 делает малозаметных врагов (`EnemyConfig.stealth`) доступными для атаки. */
+export type StatKey = 'damage' | 'range' | 'fireRate' | 'income' | 'speed' | 'fuel' | 'ammo' | 'rearmTime' | 'detect';
 export type Stats = Partial<Record<StatKey, number>>;
 
 /** Единица синергии/улучшения: итог = (база + Σadd) * Πmul. */
@@ -131,6 +132,12 @@ export interface EnemyConfig {
   /** Сколько жизней базы отнимает при прорыве. */
   leakDamage: number;
   tags: string[];
+  /** Броня: каждое попадание теряет столько урона, но наносит не меньше ARMOR_MIN_SHARE от своего урона. */
+  armor?: number;
+  /** Малозаметный: группы атакуют его, только пока он в зоне действия ауры обнаружения (стат detect). */
+  stealth?: boolean;
+  /** Носитель: при гибели выпускает на своём месте `count` врагов типа `enemy`. */
+  spawnOnDeath?: { enemy: string; count: number };
   /** Облик; без него рендерер берёт запасной примитив из тегов. */
   visual?: VisualConfig;
 }

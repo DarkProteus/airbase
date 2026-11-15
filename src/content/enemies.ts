@@ -47,9 +47,52 @@ const bomber: EnemyConfig = {
   visual: { shape: 'cylinder', model: MODELS.bomber, color: '#d1366b', scale: 1.3, altitude: 1.2 },
 };
 
+/** Ударный вертолёт: броня гасит очередь истребителя, тяжёлые ракеты штурмовика пробивают (тег low). */
+const gunship: EnemyConfig = {
+  id: 'gunship',
+  name: 'Ударный вертолёт',
+  hp: 150,
+  speed: 1.1,
+  reward: 28,
+  leakDamage: 2,
+  tags: ['air', 'low', 'armored'],
+  armor: 10,
+  visual: { shape: 'cube', model: MODELS.gunship, color: '#c96a3a', scale: 0.95, altitude: 0.55 },
+};
+
+/** Малозаметный БПЛА: без группы обнаружения (ДРЛО) в зоне его никто не атакует. */
+const ghost: EnemyConfig = {
+  id: 'ghost',
+  name: 'Малозаметный БПЛА',
+  hp: 40,
+  speed: 1.8,
+  speedVar: 0.1,
+  reward: 16,
+  leakDamage: 2,
+  tags: ['air', 'light'],
+  stealth: true,
+  visual: { shape: 'pyramid', model: MODELS.ghost, color: '#5f6f86', scale: 0.85 },
+};
+
+/** Носитель: медленный и живучий, при гибели выпускает рой дронов. */
+const carrier: EnemyConfig = {
+  id: 'carrier',
+  name: 'Носитель дронов',
+  hp: 320,
+  speed: 0.9,
+  reward: 40,
+  leakDamage: 4,
+  tags: ['air', 'heavy'],
+  spawnOnDeath: { enemy: 'drone', count: 4 },
+  visual: { shape: 'cylinder', model: MODELS.carrier, color: '#b0457a', scale: 1.15, altitude: 1.1 },
+};
+
 export const ENEMIES: Record<string, EnemyConfig> = {
   [drone.id]: drone,
   [runner.id]: runner,
   [tank.id]: tank,
   [bomber.id]: bomber,
+  [gunship.id]: gunship,
+  [ghost.id]: ghost,
+  [carrier.id]: carrier,
 };

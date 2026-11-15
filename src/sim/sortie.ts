@@ -160,6 +160,16 @@ export function enemySpeed(w: AuraWorld, enemy: EnemyState, sources: readonly Au
   return mods.length ? (applyModifiers({ speed: enemy.speed }, mods).speed ?? enemy.speed) : enemy.speed;
 }
 
+/**
+ * Можно ли атаковать врага: обычный — всегда; малозаметный (`stealth`) — только пока он в зоне действия
+ * вражеской ауры обнаружения (стат detect > 0) патрулирующей группы.
+ */
+export function enemyDetected(w: AuraWorld, enemy: Pick<EnemyState, 'type' | 'pos'>, sources: readonly AuraSource[] = auraSources(w)): boolean {
+  const cfg = w.content.enemies[enemy.type]!;
+  if (!cfg.stealth) return true;
+  return (applyModifiers({ detect: 0 }, auraMods(sources, 'enemy', enemy.pos, cfg.tags)).detect ?? 0) > 0;
+}
+
 /** Группа в начале матча: на аэродроме, заправлена и заряжена, начинает взлёт. */
 export function createGroup(mission: MissionConfig, content: Content, entry: LineupEntry, id: number): GroupState {
   const cfg = groupConfig(content, entry.group);
@@ -210,14 +220,17 @@ function moveTo(pos: Vec2, target: Vec2, stepLen: number): boolean {
 /** Сколько тиков лететь между точками: время = расстояние / скорость. */
 export const flightTicks = (from: Vec2, to: Vec2, speed: number): number => Math.ceil(dist(from, to) / (speed * DT) - 1e-6);
 
-/** Каждое оружие бьёт самого опасного (enemyThreat) врага с целевым тегом внутри зоны; выстрел расходует боекомплект. */
-function fire(sim: Sim, g: GroupState, st: GroupStats): void {
+/**
+ * Каждое оружие бьёт самого опасного (enemyThreat) врага с целевым тегом внутри зоны; выстрел расходует боекомплект.
+ * Необнаруженные малозаметные враги мишенью не становятся.
+ */
+function fire(sim: Sim, g: GroupState, st: GroupStats, sources: readonly AuraSource[]): void {
   const s = sim.state;
   st.weapons.forEach((weapon, i) => {
     if (g.ammo <= 0 || g.cooldowns[i]! > 0 || weapon.damage <= 0 || weapon.fireRate <= 0) return;
     let target: EnemyState | undefined;
     for (const e of s.enemies) {
-      if (!weaponHits(weapon, sim.content.enemies[e.type]!.tags)) continue;
+      if (!weaponHits(weapon, sim.content.enemies[e.type]!.tags) || !enemyDetected(sim, e, sources)) continue;
       if (dist(e.pos, g.zone) <= st.zoneRadius && (!target || enemyThreat(sim, e) > enemyThreat(sim, target))) target = e;
     }
     if (!target) return;
@@ -263,7 +276,7 @@ export function stepGroups(sim: Sim): void {
         g.fuel -= burn;
         // Зону могли перенести: в патруле группа держится её центра.
         if (!moveTo(g.pos, g.zone, stepLen)) setPhase(g, 'transit');
-        else fire(sim, g, st);
+        else fire(sim, g, st, sources);
         if ((own.ammo > 0 && g.ammo <= 0) || bingo()) setPhase(g, 'return');
         break;
       case 'return':

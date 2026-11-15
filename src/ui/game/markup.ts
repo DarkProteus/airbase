@@ -1,4 +1,4 @@
-import { TICK_RATE, weaponHits } from '../../sim';
+import { enemyDetected, ownModifiers, TICK_RATE, weaponHits } from '../../sim';
 import type { AirGroupConfig, Content, MissionConfig, SimState, Vec2, World } from '../../sim';
 
 /**
@@ -32,7 +32,13 @@ export interface EnemyMark {
   kind: TargetKind | undefined;
   /** Может ли выбранная группа бить этого врага; null — группа не выбрана (или она не из матча). */
   hittable: boolean | null;
+  /** Малозаметный враг вне зоны обнаружения: сейчас его не атакует никто. */
+  hidden: boolean;
 }
+
+/** Есть ли у группы аура обнаружения (стат detect по врагам) на каком-либо уровне улучшений. */
+export const groupDetects = (cfg: Pick<AirGroupConfig, 'auras' | 'upgrades'>): boolean =>
+  ownModifiers(cfg as AirGroupConfig, cfg.upgrades.length).some((m) => m.stat === 'detect' && m.side === 'enemy' && m.scope !== 'self' && m.value > 0);
 
 export function enemyMarks(content: Content, state: SimState, selectedGroup: number | null = null): EnemyMark[] {
   const group = state.groups.find((g) => g.id === selectedGroup);
@@ -44,6 +50,7 @@ export function enemyMarks(content: Content, state: SimState, selectedGroup: num
       ratio: cfg && cfg.hp > 0 ? Math.max(0, Math.min(1, e.hp / cfg.hp)) : 0,
       kind: cfg && targetKind(cfg.tags),
       hittable: groupCfg && cfg ? groupCanHit(groupCfg, cfg.tags) : null,
+      hidden: cfg ? !enemyDetected({ content, state }, e) : false,
     };
   });
 }
@@ -109,8 +116,11 @@ export function waveWarning(w: World): WaveWarning | null {
   else if (next.start === 'clear') seconds = null;
   else return null;
 
-  const hitters = (tags: readonly string[]) => [
-    ...new Set(s.groups.flatMap((g) => content.groups[g.type] ?? []).filter((cfg) => groupCanHit(cfg, tags)).map((cfg) => cfg.name)),
+  const lineup = s.groups.flatMap((g) => content.groups[g.type] ?? []);
+  const detects = lineup.some(groupDetects);
+  // Малозаметного врага без группы обнаружения в составе бить некому.
+  const hitters = (tags: readonly string[], stealth = false) => [
+    ...new Set(lineup.filter((cfg) => groupCanHit(cfg, tags) && (!stealth || detects)).map((cfg) => cfg.name)),
   ];
   const bySpawn = new Map<number, WarningEntry>();
   let total = 0;
@@ -123,7 +133,7 @@ export function waveWarning(w: World): WaveWarning | null {
     if (!entry) bySpawn.set(idx, (entry = { spawn: idx, at: { ...at }, items: [] }));
     const item = entry.items.find((i) => i.enemy === g.enemy);
     if (item) item.count += g.count;
-    else entry.items.push({ enemy: g.enemy, name: cfg.name, count: g.count, kind: targetKind(cfg.tags), hitBy: hitters(cfg.tags) });
+    else entry.items.push({ enemy: g.enemy, name: cfg.name, count: g.count, kind: targetKind(cfg.tags), hitBy: hitters(cfg.tags, cfg.stealth) });
     total += g.count;
   }
   const entries = [...bySpawn.values()].sort((a, b) => a.spawn - b.spawn);

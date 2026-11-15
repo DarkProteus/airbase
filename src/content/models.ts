@@ -186,4 +186,50 @@ const bomber: ModelConfig = {
   ],
 };
 
-export const MODELS = { f16, a10, growler, c130, e3, kc135, drone, runner, tank, bomber } satisfies Record<string, ModelConfig>;
+/** Ударный вертолёт: пузатый корпус, хвостовая балка, диск несущего винта и короткие пилоны с подвесками. */
+const gunship: ModelConfig = {
+  id: 'gunship',
+  parts: [
+    { shape: 'box', size: [0.5, 0.24, 0.22] },
+    { shape: 'sphere', size: [0.3, 0.22, 0.2], offset: [0.26, 0.02, 0], color: GLASS, segments: 6 },
+    { shape: 'box', size: [0.5, 0.07, 0.07], offset: [-0.46, 0.05, 0] },
+    { shape: 'box', size: [0.06, 0.22, 0.04], offset: [-0.7, 0.13, 0] },
+    { shape: 'cylinder', size: [0.06, 0.1, 0.06], offset: [0, 0.17, 0], color: DARK, segments: 6 },
+    { shape: 'cylinder', size: [0.95, 0.02, 0.95], offset: [0, 0.23, 0], color: DARK, segments: 10 },
+    { shape: 'box', size: [0.14, 0.04, 0.52], offset: [0.02, -0.04, 0], color: DARK },
+    { shape: 'cylinder', size: [0.08, 0.22, 0.08], offset: [0.04, -0.08, 0.26], rotation: [0, 0, 90], color: LIGHT, segments: 6 },
+    { shape: 'cylinder', size: [0.08, 0.22, 0.08], offset: [0.04, -0.08, -0.26], rotation: [0, 0, 90], color: LIGHT, segments: 6 },
+  ],
+};
+
+/** Малозаметный БПЛА: плоское «летающее крыло» без киля, тёмный воздухозаборник сверху. */
+const ghost: ModelConfig = {
+  id: 'ghost',
+  parts: [
+    { shape: 'box', size: [0.5, 0.07, 0.22] },
+    { shape: 'cone', size: [0.22, 0.24, 0.07], offset: [0.36, 0, 0], rotation: [0, 0, -90], segments: 4 },
+    { shape: 'box', size: [0.26, 0.04, 0.56], offset: [-0.06, 0, 0.3], rotation: [0, -32, 0] },
+    { shape: 'box', size: [0.26, 0.04, 0.56], offset: [-0.06, 0, -0.3], rotation: [0, 32, 0] },
+    { shape: 'box', size: [0.2, 0.05, 0.12], offset: [0.06, 0.05, 0], color: DARK },
+    { shape: 'box', size: [0.08, 0.05, 0.14], offset: [-0.26, 0, 0], color: DARK },
+  ],
+};
+
+/** Носитель: толстый транспортный фюзеляж с прямым крылом, под ним — подвешенные дроны. */
+const carrier: ModelConfig = {
+  id: 'carrier',
+  parts: [
+    { shape: 'cylinder', size: [0.3, 0.9, 0.3], rotation: [0, 0, 90], segments: 8 },
+    { shape: 'sphere', size: [0.3, 0.3, 0.3], offset: [0.45, 0, 0], color: GLASS, segments: 6 },
+    { shape: 'cone', size: [0.3, 0.3, 0.3], offset: [-0.6, 0, 0], rotation: [0, 0, 90], segments: 8 },
+    { shape: 'box', size: [0.24, 0.05, 1.1], offset: [0.02, 0.16, 0] },
+    { shape: 'box', size: [0.16, 0.04, 0.44], offset: [-0.58, 0.06, 0] },
+    { shape: 'box', size: [0.2, 0.3, 0.04], offset: [-0.56, 0.2, 0], rotation: [0, 0, 20] },
+    { shape: 'sphere', size: [0.16, 0.12, 0.16], offset: [0.06, 0.06, 0.34], color: LIGHT, segments: 6 },
+    { shape: 'sphere', size: [0.16, 0.12, 0.16], offset: [0.06, 0.06, -0.34], color: LIGHT, segments: 6 },
+    { shape: 'sphere', size: [0.16, 0.12, 0.16], offset: [0.2, -0.2, 0], color: LIGHT, segments: 6 },
+    { shape: 'sphere', size: [0.16, 0.12, 0.16], offset: [-0.14, -0.2, 0], color: LIGHT, segments: 6 },
+  ],
+};
+
+export const MODELS = { f16, a10, growler, c130, e3, kc135, drone, runner, tank, bomber, gunship, ghost, carrier } satisfies Record<string, ModelConfig>;
