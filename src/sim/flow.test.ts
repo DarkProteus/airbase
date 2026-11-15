@@ -37,6 +37,14 @@ describe('поток экранов', () => {
     expect(battle.profile).toBe(FULL);
   });
 
+  test('зоны вылета: у миссии свои стартовые зоны, без них — зоны из события', () => {
+    expect(mission.zones).toBeUndefined();
+    expect(toBattle().lineup.map((e) => e.zone)).toEqual(DEFAULT_ZONES.slice(0, LINEUP_SIZE));
+    const own = [{ x: 1, y: 2 }, { x: 3, y: 4 }, { x: 5, y: 6 }];
+    const battle = flowStep(initialFlow(FULL), sortie(1, { ...mission, zones: own })) as Extract<Flow, { screen: 'battle' }>;
+    expect(battle.lineup.map((e) => e.zone)).toEqual(own);
+  });
+
   test('вылет с неполным составом невозможен', () => {
     const base = initialFlow(START_PROFILE);
     expect(flowStep(base, sortie())).toBe(base);

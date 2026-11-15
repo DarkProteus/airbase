@@ -40,7 +40,7 @@ export function flowStep(flow: Flow, event: FlowEvent): Flow {
       return flow.screen === 'base' ? { screen: 'base', profile: event.profile } : flow;
     case 'sortie': {
       if (flow.screen !== 'base' || sortieRejection(flow.profile, event.lineupSize)) return flow;
-      const lineup = profileLineup(flow.profile, event.zones);
+      const lineup = profileLineup(flow.profile, event.mission.zones ?? event.zones);
       return { screen: 'battle', profile: flow.profile, mission: event.mission, lineup, seed: event.seed };
     }
     case 'finish': {

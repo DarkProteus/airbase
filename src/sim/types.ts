@@ -193,6 +193,8 @@ export interface MissionConfig {
   airfield: Vec2;
   baseLives: number;
   waves: Wave[];
+  /** Стартовые зоны патруля по слотам состава (центры на карте); нет — общие зоны по умолчанию из контента. */
+  zones?: Vec2[];
   /** Награда за исход миссии, сверх убийств и бонусов групп; без поля — 0 (см. reward.ts). */
   reward?: MissionReward;
 }

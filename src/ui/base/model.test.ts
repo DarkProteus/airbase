@@ -17,7 +17,7 @@ test('размер состава подставляется в текст', () 
 
 test('у каждого типа цели есть подпись, а сводка миссии показывает тип и награду', () => {
   const types = Object.values(MISSIONS).map((m) => m.objective!.type);
-  expect(types.sort()).toEqual(['defend', 'escort']);
+  expect([...new Set(types)].sort()).toEqual(['defend', 'escort']);
   for (const m of Object.values(MISSIONS)) {
     const text = missionSummary(m);
     expect(text).toContain(OBJECTIVE_LABEL[m.objective!.type]);

@@ -13,7 +13,8 @@ const BASE = ['f16', 'a10', 'growler', 'c130'];
 const NEW = ['e3', 'kc135'];
 
 const LINEUPS = combos(BASE, LINEUP_SIZE);
-const missions = Object.values(MISSIONS);
+/** Баланс 3 из 4 базовых групп — на двух первых миссиях; остальные миссии проверяются отдельно (missions.bot.test.ts). */
+const missions = [MISSIONS.evac!, MISSIONS.convoy!];
 
 /** Headless-бот прогоняет состав по всем сидам. Оценка: сначала число побед, затем средняя награда. */
 function rate(mission: (typeof missions)[number], lineup: string[]) {
