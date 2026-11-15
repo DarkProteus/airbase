@@ -54,6 +54,12 @@ export function ResultScreen({
   return (
     <main className="result" data-testid="result-screen" data-outcome={result.status}>
       <h1 data-testid="result-title" data-won={v.won}>{v.title}</h1>
+      {v.won && (
+        <div className="result-stars" data-testid="result-stars" data-stars={v.stars.earned} aria-label={`звёзд: ${v.stars.earned} из ${v.stars.max}`}>
+          {'★'.repeat(v.stars.earned)}
+          <span>{'★'.repeat(v.stars.max - v.stars.earned)}</span>
+        </div>
+      )}
       <div className="result-cols">
         <div className="result-col">
           <section className="panel">

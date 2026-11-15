@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
-import { MISSIONS } from '../../content';
+import { CAMPAIGN, MISSIONS } from '../../content';
 import { PROFILE_REJECTIONS } from '../../sim';
-import { missionSummary, OBJECTIVE_LABEL, REJECTION_TEXT, rejectionText, resetStep } from './model';
+import { defaultMission, missionCards, missionSummary, OBJECTIVE_LABEL, REJECTION_TEXT, rejectionText, resetStep, starsText } from './model';
 
 test('у каждой причины отказа есть непустой русский текст', () => {
   for (const reason of PROFILE_REJECTIONS) {
@@ -32,4 +32,32 @@ test('сброс прогресса: сначала вопрос, сброс т�
   expect(resetStep('confirm', 'cancel')).toEqual({ step: 'idle', reset: false });
   // подтверждение без вопроса сбросом не считается
   expect(resetStep('idle', 'confirm')).toEqual({ step: 'idle', reset: false });
+});
+
+test('кампания покрывает все миссии контента ровно по одному разу', () => {
+  expect([...CAMPAIGN].sort()).toEqual(Object.keys(MISSIONS).sort());
+  expect(new Set(CAMPAIGN).size).toBe(CAMPAIGN.length);
+});
+
+test('карточки миссий: порядок кампании, замки, звёзды и чем открыть', () => {
+  const fresh = missionCards(MISSIONS, CAMPAIGN, {});
+  expect(fresh.map((c) => c.id)).toEqual([...CAMPAIGN]);
+  expect(fresh.map((c) => c.locked)).toEqual(CAMPAIGN.map((_, i) => i > 0));
+  expect(fresh[1]!.unlockBy).toBe(MISSIONS[CAMPAIGN[0]!]!.name);
+  expect(fresh[0]!.unlockBy).toBeUndefined();
+  expect(defaultMission(fresh)).toBe(CAMPAIGN[0]);
+
+  const mid = missionCards(MISSIONS, CAMPAIGN, { progress: { [CAMPAIGN[0]!]: 3, [CAMPAIGN[1]!]: 1 } });
+  expect(mid.map((c) => c.locked)).toEqual(CAMPAIGN.map((_, i) => i > 2));
+  expect(mid.slice(0, 3).map((c) => c.stars)).toEqual([3, 1, 0]);
+  expect(defaultMission(mid)).toBe(CAMPAIGN[2]);
+
+  const migrated = missionCards(MISSIONS, CAMPAIGN, { unlocked: CAMPAIGN.slice(0, 2) });
+  expect(migrated.map((c) => c.locked)).toEqual(CAMPAIGN.map((_, i) => i > 1));
+});
+
+test('строка звёзд', () => {
+  expect(starsText(0)).toBe('☆☆☆');
+  expect(starsText(2)).toBe('★★☆');
+  expect(starsText(5)).toBe('★★★');
 });

@@ -1,8 +1,11 @@
 import { maxLevel } from './economy';
 import type { GroupRegistry, Profile } from './profile';
+import { MAX_STARS } from './reward';
 
-/** Версия формата сохранения: меняется при несовместимой смене формы профиля. */
-export const SAVE_VERSION = 1;
+/** Версия формата сохранения. 2 — добавлена кампания: `progress` (звёзды по миссиям) и `unlocked`. */
+export const SAVE_VERSION = 2;
+/** Сколько первых миссий кампании открывается при миграции версии 1: они были доступны до появления кампании. */
+export const LEGACY_OPEN = 2;
 
 /** Сохранение в строку: `{ version, profile }`. Хранилище — вне sim, здесь только чистый формат. */
 export const serializeProfile = (profile: Profile): string => JSON.stringify({ version: SAVE_VERSION, profile });
@@ -17,8 +20,11 @@ const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isI
  * дублей и лишних слотов сверх `lineupSize`. Поля, добавленные позже (`tutorialDone`), в старом сохранении
  * отсутствуют — версия формата не меняется, профиль читается как есть (обучение ещё не пройдено).
  * То же для `specs`: нет поля — выбор не сделан, действует первый вариант развилки.
+ * Версия 1 мигрирует: валюта, группы, состав и остальное читаются как есть, пройденных миссий нет,
+ * а первые LEGACY_OPEN миссий `campaign` открыты сразу (`unlocked`).
+ * `campaign` — порядок миссий кампании: по нему отбрасываются записи прогресса о неизвестных миссиях.
  */
-export function parseProfile(raw: string | null | undefined, groups: GroupRegistry, lineupSize: number): Profile | undefined {
+export function parseProfile(raw: string | null | undefined, groups: GroupRegistry, lineupSize: number, campaign: readonly string[] = []): Profile | undefined {
   if (typeof raw !== 'string') return undefined;
   let data: unknown;
   try {
@@ -26,7 +32,8 @@ export function parseProfile(raw: string | null | undefined, groups: GroupRegist
   } catch {
     return undefined;
   }
-  if (!isRecord(data) || data.version !== SAVE_VERSION || !isRecord(data.profile)) return undefined;
+  if (!isRecord(data) || (data.version !== SAVE_VERSION && data.version !== 1) || !isRecord(data.profile)) return undefined;
+  const legacy = data.version === 1;
   const { currency, levels, lineup } = data.profile;
   if (typeof currency !== 'number' || !Number.isFinite(currency) || currency < 0) return undefined;
   if (!isRecord(levels) || !Object.values(levels).every(isCount)) return undefined;
@@ -51,11 +58,22 @@ export function parseProfile(raw: string | null | undefined, groups: GroupRegist
       if (fork?.options?.some((o) => o.id === spec)) specs[id] = spec;
     }
   }
+  const inCampaign = (id: unknown): id is string => typeof id === 'string' && campaign.includes(id);
+  const progress: Record<string, number> = {};
+  if (!legacy && isRecord(data.profile.progress)) {
+    for (const [id, stars] of Object.entries(data.profile.progress)) {
+      if (inCampaign(id) && isCount(stars) && stars > 0) progress[id] = Math.min(MAX_STARS, stars);
+    }
+  }
+  const saved: unknown = data.profile.unlocked;
+  const unlocked = legacy ? campaign.slice(0, LEGACY_OPEN) : Array.isArray(saved) ? saved.filter(inCampaign).filter((id, i, all) => all.indexOf(id) === i) : [];
   return {
     currency,
     levels: kept,
     lineup: slots,
     ...(Object.keys(specs).length ? { specs } : {}),
+    ...(Object.keys(progress).length ? { progress } : {}),
+    ...(unlocked.length ? { unlocked } : {}),
     ...(tutorialDone ? { tutorialDone } : {}),
   };
 }

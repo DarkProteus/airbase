@@ -58,3 +58,9 @@
 .spec-option { display: flex; flex-direction: column; gap: 4px; padding: var(--sp-2); border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-hover); }
 .spec-desc { font-size: var(--fs-sm); color: var(--text-dim); }
 .spec-changes { margin: 0; padding-left: 16px; font-size: var(--fs-sm); color: var(--success); }
+
+.base .base-mission-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); width: 100%; font-size: inherit; color: inherit; }
+.base .base-mission .base-mission-stars { color: var(--accent); letter-spacing: 1px; white-space: nowrap; }
+.base .base-mission[data-locked='true'] { opacity: 0.55; cursor: not-allowed; }
+.base .base-mission[data-locked='true']:hover { border-color: var(--line); }
+.base .base-mission[data-locked='true'] .base-mission-stars { color: var(--text-dim); letter-spacing: 0; }

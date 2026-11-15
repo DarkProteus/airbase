@@ -1,5 +1,5 @@
 import type { SimState } from './engine';
-import { creditReward, missionReward, missionResult, type MissionResult, type Reward } from './reward';
+import { bestStars, creditReward, missionReward, missionResult, missionUnlocked, recordStars, type MissionResult, type Reward } from './reward';
 import { profileLineup, sortieRejection, type Profile } from './profile';
 import type { LineupEntry } from './sortie';
 import type { MissionConfig, Vec2 } from './types';
@@ -20,7 +20,7 @@ export type FlowEvent =
   /** База: изменение профиля (покупка, улучшение, состав). */
   | { type: 'profile'; profile: Profile }
   /** База → бой: миссия, правила состава и сид нового матча (сид порождает UI-слой: в sim случайности нет). */
-  | { type: 'sortie'; mission: MissionConfig; lineupSize: number; zones: readonly Vec2[]; seed: number }
+  | { type: 'sortie'; mission: MissionConfig; lineupSize: number; zones: readonly Vec2[]; seed: number; campaign?: readonly string[] }
   /** Бой → итог: конечное состояние матча. Пока матч идёт, переход невозможен. */
   | { type: 'finish'; final: SimState }
   /** Итог → база. */
@@ -32,7 +32,8 @@ export const initialFlow = (profile: Profile): Flow => ({ screen: 'base', profil
 
 /**
  * Переход потока. Недопустимое событие возвращает то же состояние (тот же объект):
- * из боя на базу — только через `finish` (итог), повторный `finish` на итоге награду не начисляет.
+ * из боя на базу — только через `finish` (итог), повторный `finish` на итоге награду не начисляет;
+ * вылет на миссию, ещё не открытую в кампании (`campaign` события), невозможен.
  */
 export function flowStep(flow: Flow, event: FlowEvent): Flow {
   switch (event.type) {
@@ -40,6 +41,7 @@ export function flowStep(flow: Flow, event: FlowEvent): Flow {
       return flow.screen === 'base' ? { screen: 'base', profile: event.profile } : flow;
     case 'sortie': {
       if (flow.screen !== 'base' || sortieRejection(flow.profile, event.lineupSize)) return flow;
+      if (event.campaign && !missionUnlocked(flow.profile, event.campaign, event.mission.id)) return flow;
       const lineup = profileLineup(flow.profile, event.mission.zones ?? event.zones);
       return { screen: 'battle', profile: flow.profile, mission: event.mission, lineup, seed: event.seed };
     }
@@ -47,8 +49,10 @@ export function flowStep(flow: Flow, event: FlowEvent): Flow {
       if (flow.screen !== 'battle') return flow;
       const result = missionResult(event.final);
       if (!result) return flow;
-      const reward = missionReward(flow.mission, result);
-      return { screen: 'result', profile: creditReward(flow.profile, reward), mission: flow.mission, result, reward };
+      // Награда и лучший результат записываются одним переходом: повторный finish сюда уже не попадёт.
+      const reward = missionReward(flow.mission, result, bestStars(flow.profile, flow.mission.id));
+      const profile = recordStars(creditReward(flow.profile, reward), flow.mission.id, reward.earned);
+      return { screen: 'result', profile, mission: flow.mission, result, reward };
     }
     case 'home':
       return flow.screen === 'result' ? { screen: 'base', profile: flow.profile } : flow;

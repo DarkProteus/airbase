@@ -214,6 +214,9 @@ const pass: MissionConfig = {
   ],
 };
 
+/** Порядок кампании: первая миссия открыта сразу, следующая открывается победой в предыдущей. */
+export const CAMPAIGN: readonly string[] = [evac.id, convoy.id, radar.id, bastion.id, river.id, pass.id];
+
 export const MISSIONS: Record<string, MissionConfig> = {
   [evac.id]: evac,
   [convoy.id]: convoy,

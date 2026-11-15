@@ -108,10 +108,10 @@ describe('флаг обучения (tutorialDone)', () => {
     expect(p.tutorialDone).toBeUndefined();
   });
 
-  test('флаг пишется и читается; версия формата прежняя', () => {
+  test('флаг пишется и читается', () => {
     const done: Profile = { ...RICH, tutorialDone: true };
     expect(parse(serializeProfile(done))).toEqual(done);
-    expect(JSON.parse(serializeProfile(done)).version).toBe(1);
+    expect(JSON.parse(serializeProfile(done)).version).toBe(SAVE_VERSION);
   });
 
   test('мусор вместо флага не отбрасывает прогресс: обучение считается не пройденным', () => {
@@ -120,5 +120,45 @@ describe('флаг обучения (tutorialDone)', () => {
       expect(p, JSON.stringify(bad)).toEqual(RICH);
       expect('tutorialDone' in p).toBe(false);
     }
+  });
+});
+
+describe('кампания: версия 2 и миграция версии 1', () => {
+  const CAMPAIGN = ['evac', 'convoy', 'radar', 'bastion'];
+  const read = (raw: string) => parseProfile(raw, GROUPS, LINEUP_SIZE, CAMPAIGN);
+
+  test('версия формата — 2', () => {
+    expect(SAVE_VERSION).toBe(2);
+    expect(JSON.parse(serializeProfile(RICH)).version).toBe(2);
+  });
+
+  test('прогресс и открытые миссии пишутся и читаются', () => {
+    const p: Profile = { ...RICH, progress: { evac: 3, convoy: 1 }, unlocked: ['evac', 'convoy'], specs: { f16: 'hunter' }, tutorialDone: true, levels: { ...RICH.levels, f16: 3 } };
+    expect(read(serializeProfile(p))).toEqual(p);
+  });
+
+  test('версия 1 мигрирует без потери валюты, групп, уровней, состава, специализаций и флага обучения', () => {
+    const old = { ...RICH, levels: { ...RICH.levels, f16: 3 }, specs: { f16: 'hunter' }, tutorialDone: true };
+    const p = read(save(old, 1))!;
+    expect(p).toEqual({ ...old, unlocked: ['evac', 'convoy'] });
+    expect(p.progress).toBeUndefined();
+    // После миграции сохраняется уже версия 2 и читается так же.
+    expect(read(serializeProfile(p))).toEqual(p);
+  });
+
+  test('версия 1: поля кампании из файла не читаются (их там быть не могло)', () => {
+    const p = read(save({ ...RICH, progress: { radar: 3 }, unlocked: ['bastion'] }, 1))!;
+    expect(p.progress).toBeUndefined();
+    expect(p.unlocked).toEqual(['evac', 'convoy']);
+  });
+
+  test('версия 2: мусор в полях кампании отбрасывается, остальной профиль цел', () => {
+    const p = read(save({ ...RICH, progress: { evac: 9, convoy: 0, ghost: 2, radar: 'x', bastion: 2 }, unlocked: ['radar', 'radar', 'nope', 7] }))!;
+    expect(p).toEqual({ ...RICH, progress: { evac: 3, bastion: 2 }, unlocked: ['radar'] });
+    expect(read(save({ ...RICH, progress: 'x', unlocked: 'y' }))).toEqual(RICH);
+  });
+
+  test('новый профиль версии 2 без полей кампании ничего лишнего не открывает', () => {
+    expect(read(serializeProfile(RICH))).toEqual(RICH);
   });
 });

@@ -1,5 +1,5 @@
 import { defaultStorage } from '../audio/storage';
-import { GROUPS, LINEUP_SIZE } from '../content';
+import { CAMPAIGN, GROUPS, LINEUP_SIZE } from '../content';
 import { parseProfile, serializeProfile } from '../sim';
 import type { Profile } from '../sim';
 
@@ -11,7 +11,7 @@ type Store = Pick<Storage, 'getItem' | 'setItem'>;
 /** Сохранённый профиль; нет записи, мусор, чужая версия или недоступное хранилище -> undefined (старт с нуля). */
 export function loadProfile(storage: Pick<Storage, 'getItem'> | undefined = defaultStorage()): Profile | undefined {
   try {
-    return parseProfile(storage?.getItem(SAVE_KEY), GROUPS, LINEUP_SIZE);
+    return parseProfile(storage?.getItem(SAVE_KEY), GROUPS, LINEUP_SIZE, CAMPAIGN);
   } catch {
     return undefined;
   }

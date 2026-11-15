@@ -39,3 +39,6 @@
 @media (max-width: 1100px) {
   .result-table th, .result-table td { padding: 3px 5px; }
 }
+
+.result-stars { font-size: 28px; letter-spacing: 6px; color: var(--accent); line-height: 1; }
+.result-stars span { color: var(--line); }

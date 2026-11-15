@@ -1,4 +1,4 @@
-import { TICK_RATE } from '../../sim';
+import { MAX_STARS, TICK_RATE } from '../../sim';
 import type { GroupRegistry, MatchStats, MissionConfig, MissionResult, Reward } from '../../sim';
 
 export interface ResultRow {
@@ -24,6 +24,8 @@ export interface ResultView {
   won: boolean;
   stats: ResultRow[];
   reward: ResultRow[];
+  /** Звёзды этого вылета: 0 при поражении. */
+  stars: { earned: number; max: number };
   /** Разбор боя: по группам и по волнам, плюс найденные слабые места. */
   groups: TableView;
   waves: TableView;
@@ -115,8 +117,10 @@ export function resultView(mission: MissionConfig, result: MissionResult, reward
       ),
     },
     weak,
+    stars: { earned: reward.earned, max: MAX_STARS },
     reward: [
-      { label: won ? 'За победу' : 'За участие', value: String(reward.base) },
+      { label: !won ? 'За участие' : reward.first ? 'За первое прохождение' : 'За повторную победу', value: String(reward.base) },
+      ...(won ? [{ label: 'За новые звёзды', value: String(reward.stars) }] : []),
       { label: 'За убийства', value: String(reward.kills) },
       { label: 'Бонус вылетов (C-130 и др.)', value: String(reward.income) },
     ],

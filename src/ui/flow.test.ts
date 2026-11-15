@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, expect, test, vi } from 'vitest';
-import { GROUPS, START_PROFILE } from '../content';
+import { CAMPAIGN, GROUPS, START_PROFILE } from '../content';
 import { buyGroup } from '../sim';
 import { SAVE_KEY } from './save';
 
@@ -39,7 +39,10 @@ test('нет сохранения -> стартовый профиль; мусо
 test('сохранённый профиль становится стартовым', async () => {
   const profile = { ...START_PROFILE, currency: 31 };
   const { initialProfile } = await boot(JSON.stringify({ version: 1, profile }));
-  expect(initialProfile()).toEqual(profile);
+  // Сохранение версии 1 мигрирует: профиль цел, первые две миссии кампании открыты.
+  expect(initialProfile()).toEqual({ ...profile, unlocked: CAMPAIGN.slice(0, 2) });
+  const v2 = await boot(JSON.stringify({ version: 2, profile }));
+  expect(v2.initialProfile()).toEqual(profile);
 });
 
 test('каждое изменение профиля пишется в хранилище, перезапуск его восстанавливает', async () => {

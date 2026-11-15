@@ -1,4 +1,4 @@
-import { DEFAULT_ZONES, LINEUP_SIZE, MISSIONS, START_PROFILE } from '../content';
+import { CAMPAIGN, DEFAULT_ZONES, LINEUP_SIZE, MISSIONS, START_PROFILE } from '../content';
 import { flowStep, initialFlow } from '../sim';
 import type { Flow, FlowEvent } from '../sim';
 import { useFlowStore } from '../store/flow';
@@ -26,7 +26,7 @@ export const newSeed = (): number => crypto.getRandomValues(new Uint32Array(1))[
 /** Вылет на выбранную миссию с составом профиля. */
 export function sortie(missionId: string): void {
   const mission = MISSIONS[missionId];
-  if (mission) send({ type: 'sortie', mission, lineupSize: LINEUP_SIZE, zones: DEFAULT_ZONES, seed: newSeed() });
+  if (mission) send({ type: 'sortie', mission, lineupSize: LINEUP_SIZE, zones: DEFAULT_ZONES, seed: newSeed(), campaign: CAMPAIGN });
 }
 
 /** Сброс прогресса: стартовый профиль (свежая копия — запись в хранилище идёт по смене ссылки) через обычное событие `profile`. Пройденное обучение не возвращается. */

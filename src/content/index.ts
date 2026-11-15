@@ -4,7 +4,7 @@ import { GROUPS } from './groups';
 
 export { ENEMIES } from './enemies';
 export { GROUPS, LINEUP_SIZE } from './groups';
-export { MISSIONS } from './missions';
+export { CAMPAIGN, MISSIONS } from './missions';
 export { MODELS } from './models';
 export { DEFAULT_LINEUP, DEFAULT_ZONES, START_PROFILE } from './profile';
 

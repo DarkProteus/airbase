@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GROUPS, LINEUP_SIZE, MISSIONS } from '../../content';
+import { CAMPAIGN, GROUPS, LINEUP_SIZE, MISSIONS } from '../../content';
 import {
   buyGroup,
   buyRejection,
@@ -13,7 +13,7 @@ import type { AirGroupConfig, Profile, ProfileRejection } from '../../sim';
 import { GroupCard } from '../entity/GroupCard';
 import { viewGroup } from '../entity/model';
 import type { GroupView } from '../entity/model';
-import { missionSummary, rejectionText, resetStep } from './model';
+import { defaultMission, missionCards, rejectionText, resetStep, starsText } from './model';
 import type { ResetStep } from './model';
 import './base.css';
 
@@ -84,7 +84,10 @@ export function BaseScreen({
   onSortie: (missionId: string) => void;
   onReset: () => void;
 }) {
-  const [missionId, setMissionId] = useState(() => Object.keys(MISSIONS)[0]!);
+  const cards = missionCards(MISSIONS, CAMPAIGN, profile);
+  const [picked, setMissionId] = useState<string | undefined>(undefined);
+  // Выбор игрока действует, пока миссия открыта; иначе — самая дальняя открытая.
+  const missionId = (cards.find((c) => c.id === picked && !c.locked)?.id ?? defaultMission(cards))!;
   const sortieReason = sortieRejection(profile, LINEUP_SIZE);
 
   const actions = (group: AirGroupConfig, view: GroupView) => {
@@ -164,7 +167,7 @@ export function BaseScreen({
       </header>
       <h2 className="base-section">Миссии</h2>
       <section className="base-missions" data-testid="missions">
-        {Object.values(MISSIONS).map((m) => (
+        {cards.map((m, i) => (
           <button
             key={m.id}
             type="button"
@@ -172,11 +175,21 @@ export function BaseScreen({
             data-testid="mission"
             data-mission={m.id}
             data-selected={m.id === missionId}
+            data-locked={m.locked}
+            data-stars={m.stars}
             aria-pressed={m.id === missionId}
+            disabled={m.locked}
             onClick={() => setMissionId(m.id)}
           >
-            <strong>{m.name}</strong>
-            <span>{missionSummary(m)}</span>
+            <span className="base-mission-head">
+              <strong>
+                {i + 1}. {m.name}
+              </strong>
+              <span className="base-mission-stars" data-testid="mission-stars" aria-label={`звёзд: ${m.stars} из ${m.maxStars}`}>
+                {m.locked ? 'закрыта' : starsText(m.stars, m.maxStars)}
+              </span>
+            </span>
+            <span>{m.locked && m.unlockBy ? `Откроется после победы в миссии «${m.unlockBy}»` : m.summary}</span>
           </button>
         ))}
       </section>

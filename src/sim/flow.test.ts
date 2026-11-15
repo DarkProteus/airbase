@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { CONTENT, DEFAULT_ZONES, LINEUP_SIZE, MISSIONS, START_PROFILE } from '../content';
-import { createSim, flowStep, initialFlow, missionReward, missionResult, snapshot, step, TICK_RATE } from '.';
+import { bestStars, createSim, flowStep, initialFlow, missionReward, missionResult, snapshot, step, TICK_RATE } from '.';
 import type { Flow, FlowEvent, Profile, SimState } from '.';
 
 const mission = MISSIONS.convoy!;
@@ -144,5 +144,51 @@ describe('обучение пройдено (tutorialDone)', () => {
     const base = flowStep(result, { type: 'home' });
     expect(base.profile.tutorialDone).toBe(true);
     expect(flowStep(base, { type: 'profile', profile: { ...base.profile, currency: 1 } }).profile.tutorialDone).toBe(true);
+  });
+});
+
+describe('кампания в потоке', () => {
+  const CHAIN = ['evac', 'convoy', 'radar'];
+  const go = (profile: Profile, id: string) => flowStep(initialFlow(profile), { ...sortie(1, MISSIONS[id]!), campaign: CHAIN } as FlowEvent);
+
+  test('на закрытую миссию вылететь нельзя, на открытую — можно', () => {
+    const base = initialFlow(FULL);
+    expect(flowStep(base, { ...sortie(1, MISSIONS.convoy!), campaign: CHAIN } as FlowEvent)).toBe(base);
+    expect(go(FULL, 'evac').screen).toBe('battle');
+    expect(go({ ...FULL, progress: { evac: 1 } }, 'convoy').screen).toBe('battle');
+    expect(go({ ...FULL, progress: { evac: 1 } }, 'radar').screen).toBe('base');
+    expect(go({ ...FULL, unlocked: ['convoy'] }, 'convoy').screen).toBe('battle');
+  });
+
+  test('победа записывает лучший результат и открывает следующую миссию; награда и запись — один раз', () => {
+    const STRONG = FULL;
+    const battle = toBattle(STRONG);
+    // Исход боя здесь не важен: берём доигранный матч и объявляем его победой с целой целью.
+    const played = finished(battle);
+    const final: SimState = { ...played, status: 'won', objective: { ...played.objective!, hp: mission.objective!.hp } };
+    const result = flowStep(battle, { type: 'finish', final }) as Extract<Flow, { screen: 'result' }>;
+    expect(result.reward.first).toBe(true);
+    expect(result.reward.earned).toBe(3);
+    expect(bestStars(result.profile, mission.id)).toBe(result.reward.earned);
+    expect(result.profile.currency).toBe(STRONG.currency + result.reward.total);
+    expect(flowStep(result, { type: 'finish', final })).toBe(result);
+
+    // Повторное прохождение с тем же исходом: награда меньше, результат прежний.
+    const home = flowStep(result, { type: 'home' });
+    const again = flowStep(flowStep(home, sortie()), { type: 'finish', final }) as Extract<Flow, { screen: 'result' }>;
+    expect(again.reward.first).toBe(false);
+    expect(again.reward.stars).toBe(0);
+    expect(again.reward.total).toBeLessThan(result.reward.total);
+    expect(bestStars(again.profile, mission.id)).toBe(result.reward.earned);
+    expect(again.profile.currency).toBe(result.profile.currency + again.reward.total);
+  });
+
+  test('поражение прогресс не записывает', () => {
+    const battle = flowStep(initialFlow({ currency: 0, levels: { c130: 0, growler: 0, kc135: 0 }, lineup: ['c130', 'growler', 'kc135'] }), sortie()) as Extract<Flow, { screen: 'battle' }>;
+    const final = finished(battle);
+    expect(final.status).toBe('lost');
+    const result = flowStep(battle, { type: 'finish', final }) as Extract<Flow, { screen: 'result' }>;
+    expect(result.profile.progress).toBeUndefined();
+    expect(result.reward).toMatchObject({ earned: 0, stars: 0, first: false, base: mission.reward!.loss });
   });
 });
