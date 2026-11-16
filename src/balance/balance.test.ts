@@ -49,6 +49,11 @@ describe('баланс: все миссии × все составы (headless)'
     for (const group of Object.keys(GROUPS)) expect(ROWS.some((r) => r.winning && !r.lineup.includes(group)), group).toBe(true);
   });
 
+  test('F-16 не обязателен: минимум в трёх миссиях из шести есть выигрышный на всех сидах состав без него', () => {
+    const open = CAMPAIGN.filter((id) => ROWS.some((r) => r.mission === id && r.winning && !r.lineup.includes('f16')));
+    expect(open.length, open.join(', ')).toBeGreaterThanOrEqual(3);
+  });
+
   test('первая миссия кампании проходится стартовым составом без покупок', () => {
     expect(START_PROFILE.lineup).toHaveLength(LINEUP_SIZE);
     const row = rowOf(CAMPAIGN[0]!, START_PROFILE.lineup);

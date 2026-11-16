@@ -66,7 +66,7 @@ const convoy: MissionConfig = {
       { x: 9, y: 9 },
       { x: 12, y: 9 },
     ],
-    hp: 24,
+    hp: 30,
     speed: 0.25,
   },
   reward: { win: 140, loss: 30 },
@@ -77,10 +77,10 @@ const convoy: MissionConfig = {
   ],
   baseLives: 1,
   waves: [
-    { prep: 5, groups: [{ enemy: 'drone', count: 5, interval: 1.2, base: 0 }] },
-    { prep: 10, groups: [{ enemy: 'tank', count: 2, interval: 3, base: 1 }, { enemy: 'drone', count: 4, interval: 1, base: 0, delay: 3 }] },
-    { prep: 12, groups: [{ enemy: 'runner', count: 6, interval: 0.6, base: 2 }, { enemy: 'tank', count: 2, interval: 3, base: 1 }] },
-    { prep: 14, groups: [{ enemy: 'drone', count: 8, interval: 0.7, base: 2 }, { enemy: 'tank', count: 3, interval: 2.5, base: 1, delay: 2 }] },
+    { prep: 5, groups: [{ enemy: 'drone', count: 4, interval: 1.2, base: 0 }] },
+    { prep: 10, groups: [{ enemy: 'tank', count: 3, interval: 3, base: 1 }, { enemy: 'drone', count: 4, interval: 1, base: 0, delay: 3 }] },
+    { prep: 12, groups: [{ enemy: 'runner', count: 5, interval: 0.6, base: 2 }, { enemy: 'tank', count: 3, interval: 3, base: 1 }] },
+    { prep: 14, groups: [{ enemy: 'drone', count: 6, interval: 0.7, base: 2 }, { enemy: 'tank', count: 4, interval: 2.5, base: 1, delay: 2 }] },
   ],
 };
 
@@ -147,7 +147,7 @@ const bastion: MissionConfig = {
     '.................',
     '.................',
   ],
-  objective: { type: 'defend', pos: { x: 9, y: 6 }, hp: 47, duration: 150 },
+  objective: { type: 'defend', pos: { x: 9, y: 6 }, hp: 51, duration: 150 },
   reward: { win: 200, loss: 45 },
   bases: [
     { id: 'armor', name: 'Танковая база', pos: { x: 16, y: 0 }, roster: [{ enemy: 'tank' }] },
@@ -205,7 +205,7 @@ const river: MissionConfig = {
       { x: 10, y: 2 },
       { x: 14, y: 2 },
     ],
-    hp: 38,
+    hp: 64,
     speed: 0.25,
   },
   reward: { win: 190, loss: 40 },
@@ -222,13 +222,13 @@ const river: MissionConfig = {
     { x: 1, y: 4 },
   ],
   waves: [
-    { prep: 5, groups: [{ enemy: 'drone', count: 4, interval: 1.2, base: 0 }] },
-    { prep: 10, groups: [{ enemy: 'tank', count: 2, interval: 3, base: 1 }, { enemy: 'drone', count: 3, interval: 1, base: 2, delay: 3 }] },
-    { prep: 12, groups: [{ enemy: 'runner', count: 5, interval: 0.6, base: 2 }, { enemy: 'tank', count: 2, interval: 3, base: 1 }] },
-    { prep: 14, groups: [{ enemy: 'drone', count: 6, interval: 0.8, base: 0 }, { enemy: 'tank', count: 2, interval: 2.5, base: 1, delay: 2 }] },
-    { prep: 14, groups: [{ enemy: 'gunship', count: 2, interval: 3, base: 2 }, { enemy: 'runner', count: 5, interval: 0.6, base: 0, delay: 2 }] },
-    { prep: 14, groups: [{ enemy: 'drone', count: 8, interval: 0.7, base: 0 }, { enemy: 'tank', count: 3, interval: 2.5, base: 1, delay: 2 }] },
-    { prep: 14, groups: [{ enemy: 'gunship', count: 3, interval: 3, base: 2 }, { enemy: 'drone', count: 8, interval: 0.7, base: 2, delay: 2 }, { enemy: 'tank', count: 2, interval: 3, base: 1, delay: 4 }] },
+    { prep: 5, groups: [{ enemy: 'drone', count: 3, interval: 1.2, base: 0 }] },
+    { prep: 10, groups: [{ enemy: 'tank', count: 3, interval: 3, base: 1 }, { enemy: 'drone', count: 3, interval: 1, base: 2, delay: 3 }] },
+    { prep: 12, groups: [{ enemy: 'runner', count: 4, interval: 0.6, base: 2 }, { enemy: 'tank', count: 3, interval: 3, base: 1 }] },
+    { prep: 14, groups: [{ enemy: 'drone', count: 5, interval: 0.8, base: 0 }, { enemy: 'tank', count: 3, interval: 2.5, base: 1, delay: 2 }] },
+    { prep: 14, groups: [{ enemy: 'gunship', count: 2, interval: 3, base: 2 }, { enemy: 'runner', count: 4, interval: 0.6, base: 0, delay: 2 }] },
+    { prep: 14, groups: [{ enemy: 'drone', count: 6, interval: 0.7, base: 0 }, { enemy: 'tank', count: 4, interval: 2.5, base: 1, delay: 2 }] },
+    { prep: 14, groups: [{ enemy: 'gunship', count: 3, interval: 3, base: 2 }, { enemy: 'drone', count: 6, interval: 0.7, base: 2, delay: 2 }, { enemy: 'tank', count: 3, interval: 3, base: 1, delay: 4 }] },
   ],
 };
 

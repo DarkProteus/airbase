@@ -47,11 +47,11 @@ describe('тексты', () => {
 
     const convoy = at('convoy', 20 * TICK_RATE);
     const info = objectiveInfo(convoy.m, convoy.s)!;
-    expect(info).toMatchObject({ type: 'escort', hp: 19, maxHp: 24 });
+    expect(info).toMatchObject({ type: 'escort', hp: 25, maxHp: 30 });
     // 5 клеток из 21 за 20 с при скорости 0,25.
     expect(info.left).toBeCloseTo(16, 6);
     expect(info.progress).toBeCloseTo(5 / 21, 6);
-    expect(hudLine(convoy.m, convoy.s)).toContain('колонна 19/24 · путь 23%');
+    expect(hudLine(convoy.m, convoy.s)).toContain('колонна 25/30 · путь 23%');
   });
 });
 
