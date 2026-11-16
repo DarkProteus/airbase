@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import { CONTENT, GROUPS, MISSIONS } from '../../content';
-import { createSim, damageEnemy, snapshot, step, TICK_RATE } from '../../sim';
+import { createSim, damageEnemy, moveClass, navRoute, snapshot, step, TERRAIN_BLOCKS, terrainCells, terrainNav, TICK_RATE } from '../../sim';
 import type { LineupEntry, MissionConfig, Sim } from '../../sim';
-import { ATTACK_LINGER_TICKS, attackLinks, baseMarks, baseUpgradeNotice, enemyMarks, groupCanHit, groupTargetKinds, PATH_ENTRY_NAME, targetKind, waveWarning } from './markup';
+import { ATTACK_LINGER_TICKS, attackLinks, baseMarks, baseUpgradeNotice, enemyMarks, groupCanHit, groupTargetKinds, PATH_ENTRY_NAME, targetKind, TERRAIN_LABEL, terrainLegend, warningRoutes, waveWarning } from './markup';
 import { groupRows, world } from './selectors';
 
 const evac = MISSIONS.evac!;
@@ -237,5 +237,59 @@ describe('вражеские базы в разметке', () => {
     expect(baseUpgradeNotice(evac, CONTENT, [{ type: 'baseUpgrade', base: 1, enemy: 'tank' }, { type: 'baseUpgrade', base: 2, enemy: 'drone' }])).toBe(
       `${evac.bases![1]!.name}: новый тип — ${CONTENT.enemies.tank!.name} · ${evac.bases![2]!.name}: новый тип — ${CONTENT.enemies.drone!.name}`,
     );
+  });
+});
+
+describe('рельеф на карте: маршруты волны и легенда', () => {
+  const routesAtStart = (m: MissionConfig) => warningRoutes(world(m, CONTENT, snapshot(createSim(m, CONTENT, 1, [at({ x: 0, y: 0 }, 'f16')]))));
+
+  test('маршруты ближайшей волны — по одному на базу и класс движения, от базы до цели', () => {
+    const routes = routesAtStart(evac);
+    const first = evac.waves[0]!.groups;
+    const expected = new Set(first.map((g) => `${g.base}:${moveClass(CONTENT.enemies[g.enemy]!.tags)}`));
+    expect(new Set(routes.map((r) => `${r.base}:${r.kind}`))).toEqual(expected);
+    const goal = evac.objective!.type === 'defend' ? evac.objective!.pos : undefined;
+    for (const r of routes) {
+      expect(r.points[0]).toEqual(evac.bases![r.base]!.pos);
+      expect(r.points.at(-1)).toEqual(goal);
+    }
+  });
+
+  test('маршрут — та же навигация, что ведёт врагов в sim: совпадает с navRoute и не заходит на закрытые клетки', () => {
+    for (const m of Object.values(MISSIONS)) {
+      const nav = terrainNav(m);
+      const closed = new Set(terrainCells(m).map((c) => `${c.x},${c.y},${c.kind}`));
+      for (const r of routesAtStart(m)) {
+        expect(r.points, m.id).toEqual(navRoute(nav, r.kind, m.bases![r.base]!.pos, r.points.at(-1)!));
+        for (const p of r.points.slice(1, -1))
+          for (const kind of Object.keys(TERRAIN_BLOCKS) as (keyof typeof TERRAIN_BLOCKS)[])
+            if (TERRAIN_BLOCKS[kind].includes(r.kind)) expect(closed.has(`${Math.round(p.x)},${Math.round(p.y)},${kind}`), `${m.id} ${p.x},${p.y}`).toBe(false);
+      }
+    }
+  });
+
+  test('хотя бы в одной миссии маршрут первой волны — ломаная в обход преграды', () => {
+    expect(Object.values(MISSIONS).some((m) => routesAtStart(m).some((r) => r.points.length > 2))).toBe(true);
+  });
+
+  test('пока предупреждения о волне нет, маршруты не показываются', () => {
+    const sim = createSim(evac, CONTENT, 1, [at({ x: 0, y: 0 }, 'f16')]);
+    run(sim, (evac.waves[0]!.prep + 1) * TICK_RATE);
+    expect(waveWarning(world(evac, CONTENT, snapshot(sim)))).toBeNull();
+    expect(warningRoutes(world(evac, CONTENT, snapshot(sim)))).toEqual([]);
+  });
+
+  test('легенда перечисляет только виды преград с карты миссии, а кому закрыт путь — из таблицы sim', () => {
+    for (const m of Object.values(MISSIONS)) {
+      const present = new Set(terrainCells(m).map((c) => c.kind));
+      const legend = terrainLegend(m);
+      expect(new Set(legend.map((n) => n.kind)), m.id).toEqual(present);
+      for (const n of legend) {
+        expect(n.name).toBe(TERRAIN_LABEL[n.kind]);
+        expect(n.text.includes('наземным') || n.text.includes('никому')).toBe(TERRAIN_BLOCKS[n.kind].includes('ground'));
+        expect(n.text.includes('воздушным') || n.text.includes('никому')).toBe(TERRAIN_BLOCKS[n.kind].includes('air'));
+      }
+    }
+    expect(terrainLegend({ ...evac, terrain: undefined })).toEqual([]);
   });
 });

@@ -1,8 +1,9 @@
 import { Box3, Mesh } from 'three';
 import { expect, test } from 'vitest';
-import { MISSIONS } from '../content';
-import { buildPath } from '../sim';
+import { ENEMIES, MISSIONS } from '../content';
+import { buildPath, terrainCells } from '../sim';
 import type { MissionConfig, Vec2 } from '../sim';
+import { DEFAULT_ALTITUDE } from '../ui/entity/model';
 import { buildModel } from './model';
 import {
   clearance,
@@ -13,8 +14,11 @@ import {
   layoutAirfield,
   layoutEnvironment,
   layoutRoad,
+  layoutTerrain,
+  PEAK_HEIGHT,
   roadPolyline,
   ROAD_EXTENSION,
+  routeDots,
   routePose,
   valueNoise,
 } from './environment';
@@ -193,4 +197,52 @@ test('модели окружения: все собираются, низ на 
     });
     expect(meshes).toBe(model.parts.length);
   }
+});
+
+test('рельеф-преграда: клетки — те же данные, что читает sim; вершины стоят на своих клетках, вода плоская', () => {
+  for (const m of missions) {
+    const { cells, peaks } = layoutEnvironment(m).terrain;
+    expect(cells, m.id).toEqual(terrainCells(m));
+    const kindAt = new Map(cells.map((c) => [`${c.x},${c.y}`, c.kind]));
+    for (const p of peaks) {
+      // Основание вершины не выходит за клетку: преграда на карте занимает ровно закрытые клетки.
+      const cx = Math.round(p.at.x);
+      const cy = Math.round(p.at.y);
+      expect(kindAt.get(`${cx},${cy}`), m.id).toBe(p.kind);
+      expect(Math.abs(p.at.x - cx) + p.radius).toBeLessThanOrEqual(0.5 + 1e-9);
+      expect(Math.abs(p.at.y - cy) + p.radius).toBeLessThanOrEqual(0.5 + 1e-9);
+    }
+    const solid = cells.filter((c) => c.kind !== 'water');
+    expect(peaks).toHaveLength(solid.length * 2);
+    expect(layoutEnvironment(m).terrain).toEqual(layoutTerrain(m));
+  }
+});
+
+test('преграды отличимы по высоте: горы ниже обычной высоты полёта, главные вершины хребта выше любого полёта', () => {
+  const flight = Object.values(ENEMIES).filter((e) => e.tags.includes('air')).map((e) => e.visual?.altitude ?? DEFAULT_ALTITUDE);
+  expect(PEAK_HEIGHT.mountain[1]).toBeLessThan(DEFAULT_ALTITUDE);
+  expect(PEAK_HEIGHT.ridge[0]).toBeGreaterThan(Math.max(...flight));
+  const peaks = missions.flatMap((m) => layoutTerrain(m).peaks);
+  for (const p of peaks.filter((x) => x.kind === 'mountain')) expect(p.height).toBeLessThanOrEqual(PEAK_HEIGHT.mountain[1]);
+  for (const p of peaks.filter((x) => x.snow)) expect(p.height).toBeGreaterThanOrEqual(PEAK_HEIGHT.ridge[0]);
+  expect(peaks.filter((p) => p.snow).every((p) => p.kind === 'ridge')).toBe(true);
+});
+
+test('деревья и камни не стоят на клетках преград', () => {
+  for (const m of missions) {
+    const barred = new Set(terrainCells(m).map((c) => `${c.x},${c.y}`));
+    for (const d of layoutEnvironment(m).decor.filter((x) => inMap(m, x.at)))
+      if (d.kind !== 'hill') expect(barred.has(`${Math.round(d.at.x)},${Math.round(d.at.y)}`), `${m.id} ${d.kind}`).toBe(false);
+  }
+});
+
+test('точки маршрута: равный шаг вдоль ломаной, отступ от базы и от цели', () => {
+  const line: Vec2[] = [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }];
+  const dots = routeDots(line, 0.5, 1);
+  expect(dots[0]).toEqual({ x: 1, y: 0 });
+  expect(dots.at(-1)).toEqual({ x: 4, y: 2 });
+  expect(dots).toHaveLength(11);
+  for (const d of dots) expect(distToPolyline(d, line)).toBeCloseTo(0);
+  expect(routeDots([{ x: 0, y: 0 }, { x: 1, y: 0 }], 0.5, 0.8)).toEqual([]);
+  expect(routeDots([])).toEqual([]);
 });
