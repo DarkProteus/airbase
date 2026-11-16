@@ -49,8 +49,8 @@ export function firstClearReward(mission: MissionConfig, run: MatchResult): numb
   return win + starsOf(mission, run) * Math.round(win * STAR_SHARE) + run.reward;
 }
 
-export function sweepRow(mission: MissionConfig, lineup: string[], seeds: readonly number[] = SWEEP_SEEDS): SweepRow {
-  const runs = seeds.map((seed) => runMatch(mission, CONTENT, seed, lineup));
+/** Строка прогонов из готовых матчей состава на миссии (по одному на сид). */
+export function rowFromRuns(mission: MissionConfig, lineup: string[], runs: MatchResult[]): SweepRow {
   const won = runs.filter((r) => r.status === 'won');
   return {
     mission: mission.id,
@@ -62,6 +62,10 @@ export function sweepRow(mission: MissionConfig, lineup: string[], seeds: readon
     reward: mean(won.map((r) => firstClearReward(mission, r))),
     runs,
   };
+}
+
+export function sweepRow(mission: MissionConfig, lineup: string[], seeds: readonly number[] = SWEEP_SEEDS): SweepRow {
+  return rowFromRuns(mission, lineup, seeds.map((seed) => runMatch(mission, CONTENT, seed, lineup)));
 }
 
 /** Полный прогон: все миссии кампании × все составы × сиды. */
@@ -106,12 +110,11 @@ export function economy(rows: readonly SweepRow[]): Economy {
   };
 }
 
-const pct = (x: number): string => `${Math.round(x * 100)}%`;
-const names = (lineup: readonly string[]): string => lineup.map((id) => GROUPS[id]!.name).join(' + ');
+export const pct = (x: number): string => `${Math.round(x * 100)}%`;
+export const names = (lineup: readonly string[]): string => lineup.map((id) => GROUPS[id]!.name).join(' + ');
 
-/** Отчёт о прогонах в Markdown: таблица побед, выигрышные составы, первая миссия, экономика. */
-export function balanceReport(seeds: readonly number[] = SWEEP_SEEDS): string {
-  const rows = sweep(seeds);
+/** Отчёт о прогонах в Markdown: таблица побед, выигрышные составы, первая миссия, экономика. `rows` — готовый `sweep(seeds)`, если он уже посчитан. */
+export function balanceReport(seeds: readonly number[] = SWEEP_SEEDS, rows: readonly SweepRow[] = sweep(seeds)): string {
   const lineups = allLineups();
   const missions = CAMPAIGN.map((id) => MISSIONS[id]!);
   const cell = (m: MissionConfig, lineup: string[]) => rows.find((r) => r.mission === m.id && lineupKey(r.lineup) === lineupKey(lineup))!;
