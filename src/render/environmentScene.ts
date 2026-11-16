@@ -22,7 +22,7 @@ import {
 import type { MissionConfig, Vec2 } from '../sim';
 import { cellToWorld } from './coords';
 import { groundTint, hillHeight, layoutEnvironment } from './environment';
-import type { DecorItem, PeakItem, Placed } from './environment';
+import type { PeakItem, Placed } from './environment';
 import { buildModel } from './model';
 import { CONVOY_CARS, FUEL, HANGAR, HQ, runwayModel, SPAWN_GATE, TOWER } from './props';
 

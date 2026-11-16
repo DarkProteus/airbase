@@ -3,6 +3,7 @@ import {
   BoxGeometry,
   BufferGeometry,
   CircleGeometry,
+  InstancedMesh,
   Color,
   ConeGeometry,
   CylinderGeometry,
@@ -21,7 +22,8 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
-import type { Material, Object3D } from 'three';
+import { Object3D } from 'three';
+import type { Material } from 'three';
 import { visualOf } from '../ui/entity/model';
 import { attackLinks, enemyMarks, TARGET_KINDS, targetKind } from '../ui/game/markup';
 import type { EnemyMark, TargetKind } from '../ui/game/markup';
