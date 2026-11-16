@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { CAMPAIGN, GROUPS, LINEUP_SIZE, MISSIONS, START_PROFILE } from '.';
+import { CAMPAIGN, GROUPS, LINEUP_SIZE, MISSIONS, START_PROFILE } from '../content';
 import { allLineups, combos, economy, lineupKey, sweep } from './sweep';
 
 /** Сиды теста: три из сидов отчёта — компромисс между надёжностью и скоростью; полный набор гоняет `npm run balance`. */

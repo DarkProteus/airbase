@@ -8,7 +8,7 @@ const MARK = '<!-- Ниже — результат `npm run balance`; не пр�
 
 const server = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
 try {
-  const { balanceReport } = await server.ssrLoadModule('/src/content/sweep.ts');
+  const { balanceReport } = await server.ssrLoadModule('/src/balance/sweep.ts');
   const old = readFileSync(FILE, 'utf8');
   const at = old.indexOf(MARK);
   if (at < 0) throw new Error(`${FILE}: нет строки-метки`);

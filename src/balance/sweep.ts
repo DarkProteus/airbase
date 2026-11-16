@@ -1,9 +1,6 @@
 import { createSim, missionStars, runMatch, step, STAR_SHARE, TICK_RATE } from '../sim';
 import type { Content, MatchResult, MissionConfig, Vec2 } from '../sim';
-import { ENEMIES } from './enemies';
-import { GROUPS, LINEUP_SIZE } from './groups';
-import { CAMPAIGN, MISSIONS } from './missions';
-import { DEFAULT_ZONES, START_PROFILE } from './profile';
+import { CAMPAIGN, DEFAULT_ZONES, ENEMIES, GROUPS, LINEUP_SIZE, MISSIONS, START_PROFILE } from '../content';
 
 /**
  * Симулятор баланса (design.md §4): headless-бот прогоняет все миссии кампании всеми составами.

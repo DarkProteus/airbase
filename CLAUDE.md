@@ -30,6 +30,7 @@ Do not edit Backlog task, draft, document, decision, or milestone markdown files
 ```
 src/sim      чистая логика матча (типы, движок, RNG) — headless
 src/content  контент как данные: авиагруппы, враги, миссии (TS-конфиги + реестры)
+src/balance  headless-прогоны баланса и отчёт: читает sim и content, запускается тестом и `npm run balance`
 src/render   Three.js: изометрия, фикс. камера; читает снапшот sim
 src/ui       React: универсальные компоненты, строятся из конфигов
 src/store    Zustand: только UI-состояние и снапшот sim, без логики
