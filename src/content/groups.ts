@@ -153,11 +153,11 @@ const c130: AirGroupConfig = {
   takeoffTime: 3,
   rearmTime: 6,
   zoneRadius: 1.5,
-  income: 25,
+  income: 40,
   weapons: [],
   auras: [],
   upgrades: [
-    { cost: 100, modifiers: [{ stat: 'income', op: 'add', value: 10, scope: 'self' }] },
+    { cost: 100, modifiers: [{ stat: 'income', op: 'add', value: 15, scope: 'self' }] },
     {
       cost: 150,
       modifiers: [],
@@ -165,21 +165,22 @@ const c130: AirGroupConfig = {
         {
           id: 'cargo',
           name: 'Крупные грузы',
-          description: 'Бонус за вылет +15: больше дохода с каждого рейса.',
-          modifiers: [{ stat: 'income', op: 'add', value: 15, scope: 'self' }],
+          description: 'Бонус за вылет +25: больше дохода с каждого рейса.',
+          modifiers: [{ stat: 'income', op: 'add', value: 25, scope: 'self' }],
         },
         {
           id: 'turnaround',
           name: 'Быстрый оборот',
-          description: 'Перезарядка −3 с и скорость ×1,25: рейсов за миссию больше.',
+          description: 'Перезарядка −3 с, скорость ×1,25 и бонус за вылет +15: рейсов за миссию больше, и каждый приносит больше.',
           modifiers: [
             { stat: 'rearmTime', op: 'add', value: -3, scope: 'self' },
             { stat: 'speed', op: 'mul', value: 1.25, scope: 'self' },
+            { stat: 'income', op: 'add', value: 15, scope: 'self' },
           ],
         },
       ],
     },
-    { cost: 210, modifiers: [{ stat: 'income', op: 'add', value: 10, scope: 'self' }] },
+    { cost: 210, modifiers: [{ stat: 'income', op: 'add', value: 15, scope: 'self' }] },
   ],
   visual: { shape: 'cube', model: MODELS.c130, color: '#d9c25c', scale: 1.2 },
 };

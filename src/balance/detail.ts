@@ -1,7 +1,7 @@
 import { botZone, createObjective, createSim, step, TICK_RATE } from '../sim';
 import type { AirGroupConfig, Command, Content, MatchResult, MissionConfig } from '../sim';
 import { CAMPAIGN, ENEMIES, GROUPS, MISSIONS } from '../content';
-import { allLineups, balanceReport, lineupKey, names, pct, rowFromRuns, SWEEP_SEEDS } from './sweep';
+import { allLineups, balanceReport, firstClearReward, lineupKey, names, pct, rowFromRuns, SWEEP_SEEDS } from './sweep';
 import type { SweepRow } from './sweep';
 
 /**
@@ -36,6 +36,8 @@ export interface GroupTotals {
 /** Один матч: итог как у `runMatch` плюс статистика групп и врагов. */
 export interface DetailRun {
   match: MatchResult;
+  /** Часть награды матча от бонусов групп за вылеты (стат income). */
+  income: number;
   groups: GroupTotals[];
   enemies: Record<string, EnemyTally>;
 }
@@ -89,6 +91,7 @@ export function detailRun(mission: MissionConfig, seed: number, setup: readonly 
   }
   return {
     match: { status: s.status, reward: s.money, hp: s.objective?.hp ?? s.lives, kills, sorties, ticks: s.tick },
+    income: s.income,
     groups: s.stats.groups.map((g) => ({ type: g.type, kills: g.kills, damage: g.damage, sorties: g.sorties, patrol: s.tick ? g.patrolTicks / s.tick : 0 })),
     enemies,
   };
@@ -239,7 +242,7 @@ export function enemyTables(results: readonly JobResult[]): string[] {
 export function upgradeTable(results: readonly JobResult[]): string[] {
   const out = ['## Вклад улучшений', ''];
   out.push('Каждый вариант — состав уровня 0, где одна группа поднята до уровня (и специализации, если развилка пройдена), остальные не улучшены. Пара — «миссия × состав» с этой группой.');
-  out.push('Проигрыш → победа: пара не выигрывала миссию (победа не на всех сидах), а с улучшением выигрывает; победа → проигрыш — наоборот. Δ побед — сумма по парам побед из прогонов (по сидам), Δ остатка — в процентных пунктах прочности цели (проигрыш — 0), Δ валюты — награда за матч (убийства и бонусы групп), средняя по парам. Цена — сумма цен улучшений до этого уровня.', '');
+  out.push('Проигрыш → победа: пара не выигрывала миссию (победа не на всех сидах), а с улучшением выигрывает; победа → проигрыш — наоборот. Δ побед — сумма по парам побед из прогонов (по сидам), Δ остатка — в процентных пунктах прочности цели (проигрыш — 0), Δ валюты — награда за матч (убийства и бонусы групп), средняя по парам. Цена — сумма цен улучшений до этого уровня. Окупаемость — цена / Δ валюты: за сколько побед (матчей) улучшение возвращает свою цену (только при Δ валюты > 0).', '');
   const rows: string[][] = [];
   for (const g of Object.values(GROUPS)) {
     const mine = results.filter((r) => r.lineup.includes(g.id));
@@ -259,10 +262,12 @@ export function upgradeTable(results: readonly JobResult[]): string[] {
         dHp.push((hpShare(mission, runs) - hpShare(mission, base)) * 100);
         dMoney.push(mean(runs.map((x) => x.reward)) - mean(base.map((x) => x.reward)));
       }
-      rows.push([g.name, v.label, String(variantCost(g, v.level)), String(mine.length), String(up), String(down), signed(dWins, 0), signed(mean(dHp)), signed(mean(dMoney), 0)]);
+      const cost = variantCost(g, v.level);
+      const gain = mean(dMoney);
+      rows.push([g.name, v.label, String(cost), String(mine.length), String(up), String(down), signed(dWins, 0), signed(mean(dHp)), signed(gain, 0), gain >= 0.5 ? fixed(cost / gain) : '—']);
     }
   }
-  out.push(...table(['Группа', 'Вариант', 'Цена', 'Пар', 'Проигрыш → победа', 'Победа → проигрыш', 'Δ побед', 'Δ остатка, пп', 'Δ валюты'], rows));
+  out.push(...table(['Группа', 'Вариант', 'Цена', 'Пар', 'Проигрыш → победа', 'Победа → проигрыш', 'Δ побед', 'Δ остатка, пп', 'Δ валюты', 'Окупаемость, побед'], rows));
   return out;
 }
 
@@ -290,9 +295,31 @@ export function maxLevelTables(results: readonly JobResult[]): string[] {
   return out;
 }
 
+/**
+ * Доход групп с income (C-130) в выигрышных составах миссии, без улучшений: бонус за вылеты за матч против награды первого прохождения этого состава
+ * (база + звёзды + убийства + бонусы; та же, что в таблице экономики). Доля — доход / награда.
+ */
+export function incomeTable(results: readonly JobResult[]): string[] {
+  const out = ['## Доход экономических групп', ''];
+  out.push('Выигрышные составы с группой, у которой есть бонус за вылет (income), без улучшений; среднее по сидам. Награда — первое прохождение: база + звёзды + убийства + бонус групп (как в таблице экономики). Доля — доход группы / награда.', '');
+  const rows: string[][] = [];
+  for (const m of CAMPAIGN.map((id) => MISSIONS[id]!)) {
+    for (const r of results.filter((x) => x.mission === m.id && isWinning(x.base.map((b) => b.match)))) {
+      for (const g of r.lineup.filter((id) => GROUPS[id]!.income)) {
+        const income = mean(r.base.map((b) => b.income));
+        const reward = mean(r.base.map((b) => firstClearReward(m, b.match)));
+        const flights = mean(r.base.map((b) => b.groups.find((x) => x.type === g)?.sorties ?? 0));
+        rows.push([m.name, names(r.lineup), GROUPS[g]!.name, fixed(flights), fixed(income, 0), fixed(reward, 0), pct(income / reward)]);
+      }
+    }
+  }
+  out.push(...table(['Миссия', 'Состав', 'Группа', 'Вылетов за матч', 'Доход за матч', 'Награда', 'Доля'], rows));
+  return out;
+}
+
 /** Таблицы расширенных прогонов для отчёта. */
 export function detailReport(results: readonly JobResult[]): string {
-  return [...groupTables(results), '', ...enemyTables(results), '', ...upgradeTable(results), '', ...maxLevelTables(results)].join('\n') + '\n';
+  return [...groupTables(results), '', ...enemyTables(results), '', ...upgradeTable(results), '', ...incomeTable(results), '', ...maxLevelTables(results)].join('\n') + '\n';
 }
 
 /** Строки `sweep` из задач: базовые прогоны используются и в отчёте о победах, и в таблицах, повторно не гоняются. */

@@ -43,7 +43,7 @@ describe('расширенный прогон баланса', () => {
 
   test('таблицы строятся: группы, враги, улучшения, максимальный уровень; неизвестных врагов нет', () => {
     const text = detailReport([result]);
-    for (const heading of ['## Вклад групп', '## Вклад врагов', '## Вклад улучшений', '## Максимальный уровень']) expect(text).toContain(heading);
+    for (const heading of ['## Вклад групп', '## Вклад врагов', '## Вклад улучшений', '## Доход экономических групп', '## Максимальный уровень']) expect(text).toContain(heading);
     for (const g of Object.values(GROUPS)) expect(text).toContain(`| ${g.name} |`);
     for (const e of Object.values(ENEMIES)) expect(text).toContain(`| ${e.name} |`);
     expect(text).not.toContain('?');
