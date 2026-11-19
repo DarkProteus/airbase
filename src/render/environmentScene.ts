@@ -55,6 +55,9 @@ export const TERRAIN_COLORS = { water: '#2f78b8', mountain: '#94805a', ridge: '#
 
 const BARRIER_COLORS = { water: [COLORS.waterDeep, COLORS.water], mountain: [COLORS.mountainBase, COLORS.mountainBase], ridge: [COLORS.ridgeBase, COLORS.ridgeBase] } as const;
 
+/** Непрозрачность вершин хребта: сквозь них видны враги, базы, кольца и маршруты за хребтом (см. PEAK_HEIGHT). */
+export const RIDGE_OPACITY = 0.42;
+
 /** Уровень земли вне карты (карта стоит на невысокой плите над ним). */
 const OUTER_Y = -0.28;
 
@@ -115,9 +118,10 @@ function place(obj: Object3D, p: Placed | { at: Vec2; heading?: number }, size: 
 
 const dummy = new Object3D();
 
-function instanced<T>(geo: BufferGeometry, items: T[], colorOf: (it: T) => Color, pose: (it: T, o: Object3D) => void): InstancedMesh | undefined {
+/** `opacity` < 1: полупрозрачный материал без записи глубины — то, что стоит за мешем, остаётся видно. */
+function instanced<T>(geo: BufferGeometry, items: T[], colorOf: (it: T) => Color, pose: (it: T, o: Object3D) => void, opacity = 1): InstancedMesh | undefined {
   if (!items.length) return undefined;
-  const mat = new MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+  const mat = new MeshLambertMaterial({ color: 0xffffff, flatShading: true, ...(opacity < 1 ? { transparent: true, opacity, depthWrite: false } : {}) });
   const mesh = new InstancedMesh(geo, mat, items.length);
   items.forEach((it, i) => {
     dummy.position.set(0, 0, 0);
@@ -224,22 +228,33 @@ export function buildEnvironment(mission: MissionConfig): Environment {
   const { cells, peaks } = layout.terrain;
   const snowy = peaks.filter((p) => p.snow);
   const peakColor = (p: PeakItem) => lerpColor(COLORS[p.kind][0], COLORS[p.kind][1], p.tone);
+  // Высокие вершины хребта при изометрической камере закрывают клетки позади: они полупрозрачны, горы низкие и остаются плотными.
+  const ridgePeaks = peaks.filter((p) => p.kind === 'ridge');
+  const otherPeaks = peaks.filter((p) => p.kind !== 'ridge');
+  const peakPose = (p: PeakItem, o: Object3D) => {
+    o.position.set(...ground3(p.at, size, 0.05));
+    o.rotation.y = p.rotation;
+    o.scale.set(p.radius, p.height, p.radius);
+  };
   const parts = [
     instanced(slabGeo, cells, (c) => lerpColor(BARRIER_COLORS[c.kind][0], BARRIER_COLORS[c.kind][1], groundTint(c) - 0.5), (c, o) => {
       const thick = c.kind === 'water' ? 0.03 : 0.07;
       o.position.set(...ground3(c, size, thick / 2 + 0.002));
       o.scale.set(1, thick, 1);
     }),
-    instanced(peakGeo, peaks, peakColor, (p, o) => {
-      o.position.set(...ground3(p.at, size, 0.05));
-      o.rotation.y = p.rotation;
-      o.scale.set(p.radius, p.height, p.radius);
-    }),
-    instanced(peakGeo, snowy, () => new Color(COLORS.snow), (p, o) => {
-      o.position.set(...ground3(p.at, size, 0.05 + p.height * 0.62));
-      o.rotation.y = p.rotation;
-      o.scale.set(p.radius * 0.4, p.height * 0.39, p.radius * 0.4);
-    }),
+    instanced(peakGeo, otherPeaks, peakColor, peakPose),
+    instanced(peakGeo, ridgePeaks, peakColor, peakPose, RIDGE_OPACITY),
+    instanced(
+      peakGeo,
+      snowy,
+      () => new Color(COLORS.snow),
+      (p, o) => {
+        o.position.set(...ground3(p.at, size, 0.05 + p.height * 0.62));
+        o.rotation.y = p.rotation;
+        o.scale.set(p.radius * 0.4, p.height * 0.39, p.radius * 0.4);
+      },
+      RIDGE_OPACITY,
+    ),
     instanced(crownGeo, trees, (t) => lerpColor(0x2f4d38, 0x41643f, t.tone), (t, o) => {
       o.position.set(...ground3(t.at, size, 0.2 * t.scale));
       o.rotation.y = t.rotation;

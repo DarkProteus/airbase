@@ -57,7 +57,7 @@ const gunship: EnemyConfig = {
   leakDamage: 2,
   tags: ['air', 'low', 'armored'],
   armor: 10,
-  visual: { shape: 'cube', model: MODELS.gunship, color: '#c96a3a', scale: 0.95, altitude: 0.55 },
+  visual: { shape: 'cube', model: MODELS.gunship, color: '#c96a3a', scale: 0.95, altitude: 0.8 },
 };
 
 /** Малозаметный БПЛА: без группы обнаружения (ДРЛО) в зоне его никто не атакует. */
