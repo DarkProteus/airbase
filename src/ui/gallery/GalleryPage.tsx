@@ -2,7 +2,7 @@ import { forkLevel, ownModifiers } from '../../sim';
 import { useGalleryStore } from '../../store/gallery';
 import { EntityCard } from '../entity/EntityCard';
 import { GroupCard } from '../entity/GroupCard';
-import { clampLevel, formatModifier, viewGroupWhatIf } from '../entity/model';
+import { clampLevel, formatModifier, viewGroupWhatIf } from '../../view/entity';
 import { CONTENT_REGISTRIES, collectTags, listAuraSources, listEnemies, listGroups } from './catalog';
 import './gallery.css';
 

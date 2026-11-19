@@ -1,7 +1,7 @@
 import type { VisualConfig } from '../../sim';
 import { modelPreview } from '../../render/preview';
-import { visualOf } from './model';
-import type { Visual } from './model';
+import { visualOf } from '../../view/entity';
+import type { Visual } from '../../view/entity';
 
 interface Props {
   /** Любая сущность с тегами (группа с ролью, враг). Всё берётся из конфига. */

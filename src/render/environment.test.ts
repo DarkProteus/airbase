@@ -3,7 +3,7 @@ import { expect, test } from 'vitest';
 import { ENEMIES, MISSIONS } from '../content';
 import { buildPath, terrainCells } from '../sim';
 import type { MissionConfig, Vec2 } from '../sim';
-import { DEFAULT_ALTITUDE } from '../ui/entity/model';
+import { DEFAULT_ALTITUDE } from '../view/entity';
 import { buildModel } from './model';
 import {
   clearance,

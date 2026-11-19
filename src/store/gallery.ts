@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-/** Только UI-состояние галереи; расчёты — в src/ui/entity/model.ts. */
+/** Только UI-состояние галереи; расчёты — в src/view/entity.ts. */
 interface GalleryState {
   /** Уровень улучшения по id группы. */
   levels: Record<string, number>;

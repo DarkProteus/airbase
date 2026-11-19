@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'vitest';
-import { CONTENT, GROUPS, MISSIONS } from '../../content';
-import { createSim, damageEnemy, moveClass, navRoute, snapshot, step, TERRAIN_BLOCKS, terrainCells, terrainNav, TICK_RATE } from '../../sim';
-import type { LineupEntry, MissionConfig, Sim } from '../../sim';
+import { CONTENT, GROUPS, MISSIONS } from '../content';
+import { createSim, damageEnemy, moveClass, navRoute, snapshot, step, TERRAIN_BLOCKS, terrainCells, terrainNav, TICK_RATE } from '../sim';
+import type { LineupEntry, MissionConfig, SimState, Sim, World } from '../sim';
 import { ATTACK_LINGER_TICKS, attackLinks, baseMarks, baseUpgradeNotice, enemyMarks, groupCanHit, groupTargetKinds, PATH_ENTRY_NAME, targetKind, TERRAIN_LABEL, terrainLegend, warningRoutes, waveWarning } from './markup';
-import { groupRows, world } from './selectors';
 
 const evac = MISSIONS.evac!;
+const world = (mission: MissionConfig, content: typeof CONTENT, state: SimState): World => ({ mission, content, state });
 /** Та же миссия, но базы выпускают любых врагов с первой волны — для тестовых волн не по расписанию. */
 const open = (m: MissionConfig): MissionConfig => ({ ...m, bases: m.bases?.map((b) => ({ ...b, roster: [] })) });
 const at = (zone: { x: number; y: number }, group: string): LineupEntry => ({ group, level: 0, zone });
@@ -166,18 +166,6 @@ describe('кто кого атакует', () => {
     expect(attackLinks(state)).toEqual([]);
     g.lastShot = { enemy: 424242, tick: state.tick };
     expect(attackLinks(state)).toEqual([]);
-  });
-
-  test('строка группы называет атакуемого врага и его тип; цвет и типы целей из конфига', () => {
-    const state = snapshot(sim);
-    const target = state.enemies[0]!;
-    state.groups[0]!.lastShot = { enemy: target.id, tick: state.tick };
-    const row = groupRows(world(evac, CONTENT, state))[0]!;
-    expect(row.attack).toEqual({ enemyName: CONTENT.enemies[target.type]!.name, kind: targetKind(CONTENT.enemies[target.type]!.tags) });
-    expect(row.targets).toEqual(['air']);
-    expect(row.color).toBe(GROUPS.f16!.visual!.color);
-    state.groups[0]!.lastShot = undefined;
-    expect(groupRows(world(evac, CONTENT, state))[0]!.attack).toBeNull();
   });
 
   test('реальная стрельба sim порождает связь', () => {

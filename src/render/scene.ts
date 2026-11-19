@@ -24,10 +24,10 @@ import {
 } from 'three';
 import { Object3D } from 'three';
 import type { Material } from 'three';
-import { visualOf } from '../ui/entity/model';
-import { attackLinks, enemyMarks, TARGET_KINDS, targetKind } from '../ui/game/markup';
-import type { EnemyMark, TargetKind } from '../ui/game/markup';
-import type { PreviewShape } from '../ui/entity/model';
+import { visualOf } from '../view/entity';
+import { attackLinks, enemyMarks, TARGET_KINDS, targetKind } from '../view/markup';
+import type { EnemyMark, TargetKind } from '../view/markup';
+import type { PreviewShape } from '../view/entity';
 import { DT, effectiveGroupStats, objectiveRoute, rearmTicksLeft, toTicks } from '../sim';
 import type { PathData } from '../sim';
 import type { Content, MissionConfig, SimState, SortiePhase, Vec2, VisualConfig } from '../sim';

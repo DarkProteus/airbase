@@ -4,7 +4,7 @@ import { createScene } from '../../render';
 import { useGameStore } from '../../store/game';
 import { startGame } from './driver';
 import { GroupPanel } from './GroupPanel';
-import { baseMarks, baseUpgradeNotice, terrainLegend, warningRoutes, waveWarning } from './markup';
+import { baseMarks, baseUpgradeNotice, terrainLegend, warningRoutes, waveWarning } from '../../view/markup';
 import { TERRAIN_COLORS } from '../../render';
 import { WaveWarning } from './WaveWarning';
 import { groupRows, recallCommand, REJECT_TEXT, rejectionNotice, world, zoneClick } from './selectors';

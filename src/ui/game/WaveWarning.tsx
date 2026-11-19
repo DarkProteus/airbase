@@ -1,5 +1,5 @@
 import { KindChip } from './GroupPanel';
-import type { WaveWarning as Warning } from './markup';
+import type { WaveWarning as Warning } from '../../view/markup';
 
 /** Предупреждение о ближайшей волне: через сколько секунд, с каких баз, какой состав (новые типы помечены) и кто его может бить. */
 export function WaveWarning({ warning }: { warning: Warning }) {

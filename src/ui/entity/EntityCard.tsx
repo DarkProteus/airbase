@@ -1,6 +1,6 @@
 import type { VisualConfig } from '../../sim';
 import { EntityPreview } from './EntityPreview';
-import { describeFields } from './model';
+import { describeFields } from '../../view/entity';
 import './entity.css';
 
 interface Props {

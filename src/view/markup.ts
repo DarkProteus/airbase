@@ -1,5 +1,5 @@
-import { baseNewTypes, baseTypes, enemyDetected, everyModifier, MOVE_CLASSES, moveClass, navRoute, terrainCells, terrainNav, TERRAIN_BLOCKS, TICK_RATE, weaponHits } from '../../sim';
-import type { AirGroupConfig, Content, MissionConfig, MoveClass, SimState, TerrainKind, Vec2, World } from '../../sim';
+import { baseNewTypes, baseTypes, enemyDetected, everyModifier, MOVE_CLASSES, moveClass, navRoute, terrainCells, terrainNav, TERRAIN_BLOCKS, TICK_RATE, weaponHits } from '../sim';
+import type { AirGroupConfig, Content, MissionConfig, MoveClass, SimState, TerrainKind, Vec2, World } from '../sim';
 
 /**
  * Боевая разметка: чистые функции от снапшота sim и конфигов. Рендер и React только рисуют результат.

@@ -1,6 +1,6 @@
 import { RoleIcon } from '../entity/RoleIcon';
-import { TARGET_KIND_LABEL } from './markup';
-import type { TargetKind } from './markup';
+import { TARGET_KIND_LABEL } from '../../view/markup';
+import type { TargetKind } from '../../view/markup';
 import { REJECT_TEXT } from './selectors';
 import type { GroupRow } from './selectors';
 

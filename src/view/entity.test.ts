@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
-import type { AirGroupConfig, Modifier } from '../../sim';
-import { configStats } from '../../sim';
-import { ENEMIES, GROUPS } from '../../content';
-import { describeFields, hslToHex, viewGroup, viewGroupWhatIf, visualOf, whatIfAuras } from './model';
+import type { AirGroupConfig, Modifier } from '../sim';
+import { configStats } from '../sim';
+import { ENEMIES, GROUPS } from '../content';
+import { describeFields, hslToHex, viewGroup, viewGroupWhatIf, visualOf, whatIfAuras } from './entity';
 
 const aura: Modifier = { stat: 'damage', op: 'add', value: 5, scope: 'aura', tags: ['air'] };
 

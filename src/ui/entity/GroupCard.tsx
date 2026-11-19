@@ -2,8 +2,8 @@ import type { ReactNode } from 'react';
 import type { AirGroupConfig, GroupStats } from '../../sim';
 import { EntityPreview } from './EntityPreview';
 import { RoleIcon } from './RoleIcon';
-import { formatModifier, viewGroup } from './model';
-import type { GroupView } from './model';
+import { formatModifier, viewGroup } from '../../view/entity';
+import type { GroupView } from '../../view/entity';
 import './entity.css';
 
 interface Props {

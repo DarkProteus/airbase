@@ -1,6 +1,6 @@
 import { activeSpec, effectiveGroupStats, groupStats, objectiveGoal, objectiveRoute, rearmTicksLeft, recallRejection, TICK_RATE, toTicks, zoneRejection } from '../../sim';
-import { attackLinks, groupTargetKinds, targetKind } from './markup';
-import type { TargetKind } from './markup';
+import { attackLinks, groupTargetKinds, targetKind } from '../../view/markup';
+import type { TargetKind } from '../../view/markup';
 import type { Command, Content, MissionConfig, ObjectiveConfig, RejectReason, SimEvent, SimState, SortiePhase, Vec2, World } from '../../sim';
 
 /**

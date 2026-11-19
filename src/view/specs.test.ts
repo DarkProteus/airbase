@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
-import { CONTENT, DEFAULT_ZONES, GROUPS, MISSIONS } from '../../content';
-import { configStats, createSim, groupStats } from '../../sim';
-import { viewGroup, viewGroupWhatIf } from './model';
+import { CONTENT, DEFAULT_ZONES, GROUPS, MISSIONS } from '../content';
+import { configStats, createSim, groupStats } from '../sim';
+import { viewGroup, viewGroupWhatIf } from './entity';
 
 test('карточка: варианты следующей развилки показывают изменения параметров теми же расчётами', () => {
   const view = viewGroup(GROUPS.a10!, 2);

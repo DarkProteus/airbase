@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { CONTENT, DEFAULT_LINEUP, GROUPS, MISSIONS } from '../../content';
 import { createSim, groupStats, snapshot, step, TICK_RATE } from '../../sim';
 import type { Command, SimEvent } from '../../sim';
+import { targetKind } from '../../view/markup';
 import { groupRows, hudLine, objectiveInfo, PHASE_LABEL, recallCommand, REJECT_TEXT, rejectionNotice, world, zoneClick } from './selectors';
 
 const mission = MISSIONS.evac!;
@@ -158,5 +159,23 @@ describe('кнопка «На базу»', () => {
     expect(sim.state.groups[0]!.phase).toBe('return');
     expect(row().recallRejection).toBe('notAirborne');
     expect(REJECT_TEXT.notAirborne).toBeTruthy();
+  });
+});
+
+describe('строка группы: атака', () => {
+  const evac = MISSIONS.evac!;
+  const sim = createSim(evac, CONTENT, 1, [{ group: 'f16', level: 0, zone: { x: 3, y: 3 } }]);
+  for (let i = 0; i < 40 * TICK_RATE; i++) step(sim);
+
+  test('строка группы называет атакуемого врага и его тип; цвет и типы целей из конфига', () => {
+    const state = snapshot(sim);
+    const target = state.enemies[0]!;
+    state.groups[0]!.lastShot = { enemy: target.id, tick: state.tick };
+    const row = groupRows(world(evac, CONTENT, state))[0]!;
+    expect(row.attack).toEqual({ enemyName: CONTENT.enemies[target.type]!.name, kind: targetKind(CONTENT.enemies[target.type]!.tags) });
+    expect(row.targets).toEqual(['air']);
+    expect(row.color).toBe(GROUPS.f16!.visual!.color);
+    state.groups[0]!.lastShot = undefined;
+    expect(groupRows(world(evac, CONTENT, state))[0]!.attack).toBeNull();
   });
 });

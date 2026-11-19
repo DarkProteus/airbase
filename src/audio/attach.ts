@@ -1,7 +1,7 @@
 import { CONTENT } from '../content';
 import type { MissionConfig } from '../sim';
 import { useGameStore } from '../store/game';
-import { waveWarning } from '../ui/game/markup';
+import { waveWarning } from '../view/markup';
 import { useAudioStore } from './state';
 import { createThrottle, outcomeSound, pickSounds, shotKindFor, waveAlertDue } from './sounds';
 import type { ShotResolver, SoundId } from './sounds';

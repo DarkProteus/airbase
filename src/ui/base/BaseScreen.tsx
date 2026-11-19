@@ -11,8 +11,8 @@ import {
 } from '../../sim';
 import type { AirGroupConfig, Profile, ProfileRejection } from '../../sim';
 import { GroupCard } from '../entity/GroupCard';
-import { viewGroup } from '../entity/model';
-import type { GroupView } from '../entity/model';
+import { viewGroup } from '../../view/entity';
+import type { GroupView } from '../../view/entity';
 import { defaultMission, missionCards, rejectionText, resetStep, starsText } from './model';
 import type { ResetStep } from './model';
 import './base.css';

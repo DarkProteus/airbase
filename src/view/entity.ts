@@ -1,5 +1,5 @@
-import { activeSpec, auraMods, configStats, invested, maxLevel, nextOptions, nextUpgradeCost, ownModifiers } from '../../sim';
-import type { AirGroupConfig, AuraSource, GroupStats, ModelConfig, Modifier, UpgradeOption, VisualConfig, VisualShape } from '../../sim';
+import { activeSpec, auraMods, configStats, invested, maxLevel, nextOptions, nextUpgradeCost, ownModifiers } from '../sim';
+import type { AirGroupConfig, AuraSource, GroupStats, ModelConfig, Modifier, UpgradeOption, VisualConfig, VisualShape } from '../sim';
 
 /** Чистая логика отображения сущностей: без React, без three. Строится только из конфигов. */
 

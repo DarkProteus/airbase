@@ -2,7 +2,7 @@ import { Box3, Mesh } from 'three';
 import { expect, test } from 'vitest';
 import { GROUPS, MODELS } from '../content';
 import type { ModelConfig } from '../sim';
-import { visualOf } from '../ui/entity/model';
+import { visualOf } from '../view/entity';
 import { buildModel, DEFAULT_SEGMENTS, modelParts, wingGeometry } from './model';
 
 const model: ModelConfig = {
