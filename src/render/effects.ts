@@ -1,5 +1,4 @@
-import { weaponHits } from '../sim';
-import type { ShotKind, SimEvent, WeaponConfig } from '../sim';
+import type { ShotKind, SimEvent } from '../sim';
 
 /**
  * Чистое отображение «событие снапшота -> визуальные эффекты». Без three: сцена только исполняет описания.
@@ -76,35 +75,6 @@ export const EFFECT_COLORS = {
   debris: [0x2d3138, 0xff8a3d],
   shockwave: 0xffc27a,
 } as const;
-
-// --- вид выстрела из данных оружия ---
-
-/** Порог тяжёлого редкого выстрела, если вид не задан в конфиге: большой урон за выстрел и небольшая скорострельность. */
-const HEAVY_DAMAGE = 30;
-const HEAVY_FIRE_RATE = 2;
-
-/** Вид выстрела оружия: явное поле конфига, иначе по числам — тяжёлый редкий выстрел это ракета, остальное пушка. */
-export function shotKindOf(weapon: Pick<WeaponConfig, 'damage' | 'fireRate' | 'shot'>): ShotKind {
-  return weapon.shot ?? (weapon.damage >= HEAVY_DAMAGE && weapon.fireRate <= HEAVY_FIRE_RATE ? 'missile' : 'gun');
-}
-
-/**
- * Оружие, сделавшее выстрел: среди оружия группы, бьющего эту цель, то, чей урон ближе всего к урону события
- * (урон в событии уже с модификаторами, поэтому сравниваем по отношению). Нет подходящего — undefined.
- */
-export function shotWeapon(weapons: readonly WeaponConfig[], enemyTags: readonly string[], damage: number): WeaponConfig | undefined {
-  let best: WeaponConfig | undefined;
-  let bestGap = Infinity;
-  for (const w of weapons) {
-    if (!weaponHits(w, enemyTags)) continue;
-    const gap = w.damage > 0 && damage > 0 ? Math.abs(Math.log(damage / w.damage)) : Infinity;
-    if (!best || gap < bestGap) {
-      best = w;
-      bestGap = gap;
-    }
-  }
-  return best;
-}
 
 /** Габарит взрыва врага: растёт с прочностью (логарифмически) и масштабом модели. Лёгкий дрон ~0,8, танк ~1,2, бомбардировщик ~2. */
 export function blastSize(hp: number, scale = 1): number {

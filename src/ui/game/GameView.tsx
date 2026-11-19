@@ -5,7 +5,7 @@ import { useGameStore } from '../../store/game';
 import { startGame } from './driver';
 import { GroupPanel } from './GroupPanel';
 import { baseMarks, baseUpgradeNotice, terrainLegend, warningRoutes, waveWarning } from '../../view/markup';
-import { TERRAIN_COLORS } from '../../render';
+import { terrainCss } from '../../view/terrain';
 import { WaveWarning } from './WaveWarning';
 import { groupRows, recallCommand, REJECT_TEXT, rejectionNotice, world, zoneClick } from './selectors';
 import type { LineupEntry, MissionConfig, SimState } from '../../sim';
@@ -85,7 +85,7 @@ export function GameView({ mission, lineup, seed }: { mission: MissionConfig; li
         <div className="terrain-legend panel" data-testid="terrain-legend">
           {legend.map((n) => (
             <span key={n.kind} className="terrain-note">
-              <i className="terrain-swatch" style={{ background: TERRAIN_COLORS[n.kind] }} />
+              <i className="terrain-swatch" style={{ background: terrainCss(n.kind) }} />
               {n.name} — {n.text}
             </span>
           ))}

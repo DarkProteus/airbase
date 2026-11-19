@@ -1,4 +1,4 @@
-import { shotKindOf, shotWeapon } from '../render/effects';
+import { shotKindOf, shotWeapon } from '../view/shots';
 import type { ShotKind, SimEvent, SimState, WeaponConfig } from '../sim';
 
 /**

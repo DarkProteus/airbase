@@ -19,7 +19,8 @@ import {
   SRGBColorSpace,
   NearestFilter,
 } from 'three';
-import type { MissionConfig, Vec2 } from '../sim';
+import type { MissionConfig, TerrainKind, Vec2 } from '../sim';
+import { TERRAIN_PALETTE } from '../view/terrain';
 import { cellToWorld } from './coords';
 import { groundTint, hillHeight, layoutEnvironment } from './environment';
 import type { PeakItem, Placed } from './environment';
@@ -41,19 +42,8 @@ const COLORS = {
   roadMark: 0xd8d2b0,
   apron: 0x626a74,
   gateLight: 0xff6a3d,
-  water: 0x2f78b8,
-  waterDeep: 0x245f96,
-  mountainBase: 0x6f6248,
-  mountain: [0x7d6b4c, 0x94805a],
-  ridgeBase: 0x5d6168,
-  ridge: [0x767c86, 0x969ca6],
   snow: 0xf2f5f8,
 } as const;
-
-/** Цвета преград для легенды в интерфейсе (те же, что на карте). */
-export const TERRAIN_COLORS = { water: '#2f78b8', mountain: '#94805a', ridge: '#969ca6' } as const;
-
-const BARRIER_COLORS = { water: [COLORS.waterDeep, COLORS.water], mountain: [COLORS.mountainBase, COLORS.mountainBase], ridge: [COLORS.ridgeBase, COLORS.ridgeBase] } as const;
 
 /** Непрозрачность вершин хребта: сквозь них видны враги, базы, кольца и маршруты за хребтом (см. PEAK_HEIGHT). */
 export const RIDGE_OPACITY = 0.42;
@@ -139,6 +129,12 @@ function instanced<T>(geo: BufferGeometry, items: T[], colorOf: (it: T) => Color
 }
 
 const lerpColor = (a: number, b: number, t: number) => new Color(a).lerp(new Color(b), t);
+
+/** Цвета преград — из общей палитры view/terrain (её же берёт легенда в ui). */
+export const slabTone = (kind: TerrainKind, t: number) => lerpColor(TERRAIN_PALETTE[kind].slab[0], TERRAIN_PALETTE[kind].slab[1], t);
+export const peakTone = (kind: Exclude<TerrainKind, 'water'>, t: number) => lerpColor(TERRAIN_PALETTE[kind].peak[0], TERRAIN_PALETTE[kind].peak[1], t);
+/** Цвет верхнего слоя меша преграды на верхнем оттенке: вершины, если они есть у вида, иначе плита. */
+export const topLayerColor = (kind: TerrainKind) => (kind === 'water' ? slabTone(kind, 1) : peakTone(kind, 1));
 
 export interface Environment {
   group: Group;
@@ -227,7 +223,7 @@ export function buildEnvironment(mission: MissionConfig): Environment {
   const peakGeo = new ConeGeometry(1, 1, 6).translate(0, 0.5, 0);
   const { cells, peaks } = layout.terrain;
   const snowy = peaks.filter((p) => p.snow);
-  const peakColor = (p: PeakItem) => lerpColor(COLORS[p.kind][0], COLORS[p.kind][1], p.tone);
+  const peakColor = (p: PeakItem) => peakTone(p.kind, p.tone);
   // Высокие вершины хребта при изометрической камере закрывают клетки позади: они полупрозрачны, горы низкие и остаются плотными.
   const ridgePeaks = peaks.filter((p) => p.kind === 'ridge');
   const otherPeaks = peaks.filter((p) => p.kind !== 'ridge');
@@ -237,7 +233,7 @@ export function buildEnvironment(mission: MissionConfig): Environment {
     o.scale.set(p.radius, p.height, p.radius);
   };
   const parts = [
-    instanced(slabGeo, cells, (c) => lerpColor(BARRIER_COLORS[c.kind][0], BARRIER_COLORS[c.kind][1], groundTint(c) - 0.5), (c, o) => {
+    instanced(slabGeo, cells, (c) => slabTone(c.kind, groundTint(c) - 0.5), (c, o) => {
       const thick = c.kind === 'water' ? 0.03 : 0.07;
       o.position.set(...ground3(c, size, thick / 2 + 0.002));
       o.scale.set(1, thick, 1);

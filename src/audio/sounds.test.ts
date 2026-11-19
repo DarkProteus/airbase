@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import type { SimEvent } from '../sim';
 import { GROUPS } from '../content';
-import { shotKindOf } from '../render/effects';
+import { shotKindOf } from '../view/shots';
 import { loadMuted, MUTE_KEY, saveMuted } from './storage';
 import { createThrottle, outcomeSound, pickSounds, shotKindFor, soundsForEvents, VOICES, WAVE_ALERT_SECONDS, waveAlertDue } from './sounds';
 import type { SoundId } from './sounds';

@@ -35,6 +35,7 @@ src/render   Three.js: изометрия, фикс. камера; читает 
 src/view     чистые модели представления (облик сущности, боевая разметка) для render и ui; без react/zustand/three
 src/ui       React: универсальные компоненты, строятся из конфигов
 src/store    Zustand: только UI-состояние и снапшот sim, без логики
+src/audio    звук (синтез, mute, подписка на снапшоты); читает sim, content, view и store, но не ui и render (сторожит `src/audio/purity.test.ts`)
 ```
 
 - **Sim отдельно от рендера.** В `src/sim` запрещены импорты three/react/zustand и
