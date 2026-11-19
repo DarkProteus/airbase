@@ -18,7 +18,8 @@ const f16: AirGroupConfig = {
   auras: [],
   upgrades: [
     { cost: 80, modifiers: [{ stat: 'damage', op: 'mul', value: 1.3, scope: 'self' }] },
-    { cost: 140, modifiers: [{ stat: 'ammo', op: 'add', value: 16, scope: 'self' }] },
+    // Скорострельность, а не боекомплект: топливо кончается раньше патронов, лишние патроны ничего не меняли (TASK-43).
+    { cost: 140, modifiers: [{ stat: 'fireRate', op: 'mul', value: 1.15, scope: 'self' }] },
     {
       cost: 220,
       modifiers: [],
@@ -107,7 +108,8 @@ const growler: AirGroupConfig = {
     { stat: 'damage', op: 'mul', value: 1.3, scope: 'aura', tags: ['strike'] },
   ],
   upgrades: [
-    { cost: 120, modifiers: [{ stat: 'range', op: 'add', value: 0.5, scope: 'self' }] },
+    // Аура-скорострельность вместо радиуса: союзники и так внутри зоны, лишние полметра охвата ничего не давали (TASK-43).
+    { cost: 120, modifiers: [{ stat: 'fireRate', op: 'mul', value: 1.2, scope: 'aura', tags: ['strike'] }] },
     {
       cost: 170,
       modifiers: [],
@@ -126,7 +128,14 @@ const growler: AirGroupConfig = {
         },
       ],
     },
-    { cost: 230, modifiers: [{ stat: 'rearmTime', op: 'add', value: -2, scope: 'self' }] },
+    // Усиление ауры вместо перезарядки: за матч группа вылетает 1–1,3 раза, две секунды перезарядки ничего не давали (TASK-43).
+    {
+      cost: 230,
+      modifiers: [
+        { stat: 'damage', op: 'mul', value: 1.15, scope: 'aura', tags: ['strike'] },
+        { stat: 'speed', op: 'mul', value: 0.8, scope: 'aura', side: 'enemy' },
+      ],
+    },
   ],
   visual: { shape: 'cylinder', model: MODELS.growler, color: '#a56fe0', scale: 1 },
 };
@@ -195,8 +204,19 @@ const e3: AirGroupConfig = {
     { stat: 'detect', op: 'add', value: 1, side: 'enemy', scope: 'aura' },
   ],
   upgrades: [
-    { cost: 100, modifiers: [{ stat: 'range', op: 'add', value: 0.5, scope: 'self' }] },
-    { cost: 150, modifiers: [{ stat: 'range', op: 'add', value: 0.5, scope: 'aura' }] },
+    // Улучшения ДРЛО — осведомлённость (дальность захвата союзников, охват обнаружения), TASK-43. Это потолок рычага:
+    // союзники патрулируют в 0–2 единицах от центра зоны ДРЛО при радиусе 3,5, и охват уже избыточен: ни +10 к дальности
+    // союзников, ни обнаружение на радиусе 10 не дают больше 4 новых пар (подробности в docs/balance-0.2.md).
+    { cost: 100, modifiers: [{ stat: 'range', op: 'add', value: 3, scope: 'aura' }] },
+    {
+      cost: 150,
+      modifiers: [
+        { stat: 'range', op: 'add', value: 3, scope: 'aura' },
+        { stat: 'range', op: 'add', value: 1.5, scope: 'self' },
+        // Обнаружение малозаметных врагов на радиусе 8 вместо радиуса зоны.
+        { stat: 'detect', op: 'add', value: 1, side: 'enemy', scope: 'aura', radius: 8 },
+      ],
+    },
     {
       cost: 220,
       modifiers: [],

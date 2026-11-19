@@ -112,9 +112,10 @@ describe('уровень профиля в бою', () => {
     const dmg1 = stats(upgraded).weapons[0]!.damage;
     expect(dmg0).toBe(GROUPS.f16!.weapons[0]!.damage);
     expect(dmg1).toBeCloseTo(dmg0 * 1.3);
-    // Уровень 2 даёт запас боекомплекта сразу в матче.
+    // Уровень 2 даёт скорострельность сразу в матче (TASK-43: боекомплект за вылет не кончался, и запас ничего не менял).
     const lvl2 = lineupOf(2).state.groups[0]!;
-    expect(lvl2.ammo).toBe(base!.ammo + 16);
+    expect(stats(lvl2).weapons[0]!.fireRate).toBeCloseTo(GROUPS.f16!.weapons[0]!.fireRate * 1.15);
+    expect(lvl2.ammo).toBe(base!.ammo);
   });
 });
 
