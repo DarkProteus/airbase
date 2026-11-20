@@ -40,6 +40,8 @@ export interface DetailRun {
   income: number;
   groups: GroupTotals[];
   enemies: Record<string, EnemyTally>;
+  /** Сколько врагов выпустили погибшие враги данного типа (события spawn с полем from), по типу погибшего: носитель → его дроны. */
+  released: Record<string, number>;
 }
 
 /** Строка состава: группа, уровень и специализация (уровень 0 — без улучшений). */
@@ -62,6 +64,7 @@ export function detailRun(mission: MissionConfig, seed: number, setup: readonly 
   let scheduled = 0;
   const types = new Map<number, string>();
   const enemies: Record<string, EnemyTally> = {};
+  const released: Record<string, number> = {};
   const tally = (type: string): EnemyTally => (enemies[type] ??= { spawned: 0, killed: 0, leaked: 0, damage: 0 });
   let kills = 0;
   let sorties = 0;
@@ -78,6 +81,10 @@ export function detailRun(mission: MissionConfig, seed: number, setup: readonly 
         if (!type) throw new Error(`spawn of enemy ${ev.enemy}: type unknown (${mission.id}, seed ${seed})`);
         types.set(ev.enemy, type);
         tally(type).spawned++;
+        if (ev.from !== undefined) {
+          const parent = typeOf(types, ev.from);
+          released[parent] = (released[parent] ?? 0) + 1;
+        }
       } else if (ev.type === 'kill') {
         tally(typeOf(types, ev.enemy)).killed++;
         kills++;
@@ -94,6 +101,7 @@ export function detailRun(mission: MissionConfig, seed: number, setup: readonly 
     income: s.income,
     groups: s.stats.groups.map((g) => ({ type: g.type, kills: g.kills, damage: g.damage, sorties: g.sorties, patrol: s.tick ? g.patrolTicks / s.tick : 0 })),
     enemies,
+    released,
   };
 }
 

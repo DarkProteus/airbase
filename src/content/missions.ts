@@ -270,7 +270,7 @@ const pass: MissionConfig = {
       { x: 14, y: 2 },
       { x: 18, y: 2 },
     ],
-    hp: 43,
+    hp: 55,
     speed: 0.3,
   },
   reward: { win: 240, loss: 50 },
@@ -296,7 +296,8 @@ const pass: MissionConfig = {
     { prep: 14, groups: [{ enemy: 'ghost', count: 2, interval: 2, base: 2 }, { enemy: 'runner', count: 6, interval: 0.6, base: 4, delay: 2 }] },
     { prep: 14, groups: [{ enemy: 'carrier', count: 1, interval: 1, base: 1 }, { enemy: 'drone', count: 6, interval: 0.8, base: 3, delay: 3 }, { enemy: 'runner', count: 4, interval: 0.6, base: 4, delay: 4 }] },
     { prep: 16, groups: [{ enemy: 'ghost', count: 3, interval: 1.6, base: 0 }, { enemy: 'drone', count: 8, interval: 0.7, base: 4, delay: 3 }, { enemy: 'runner', count: 5, interval: 0.6, base: 2, delay: 5 }] },
-    { prep: 18, groups: [{ enemy: 'bomber', count: 1, interval: 1, base: 1 }, { enemy: 'carrier', count: 1, interval: 1, base: 3, delay: 4 }, { enemy: 'drone', count: 6, interval: 0.8, base: 0, delay: 5 }] },
+    /** Короткая подготовка: бомбардировщик должен долететь до колонны, пока она не вышла (иначе босс не играет). */
+    { prep: 6, groups: [{ enemy: 'bomber', count: 1, interval: 1, base: 1 }, { enemy: 'carrier', count: 1, interval: 1, base: 3, delay: 4 }, { enemy: 'drone', count: 6, interval: 0.8, base: 0, delay: 5 }] },
   ],
 };
 

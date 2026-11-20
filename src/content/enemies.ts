@@ -36,10 +36,11 @@ const tank: EnemyConfig = {
   visual: { shape: 'cube', model: MODELS.tank, color: '#9a7b52', scale: 0.9 },
 };
 
+/** Босс последней волны: прочность по меркам огня одного истребителя за несколько секунд в зоне (TASK-46) — его сбивают или он бьёт по колонне. */
 const bomber: EnemyConfig = {
   id: 'bomber',
   name: 'Тяжёлый бомбардировщик',
-  hp: 1800,
+  hp: 300,
   speed: 0.6,
   reward: 50,
   leakDamage: 10,
@@ -74,11 +75,11 @@ const ghost: EnemyConfig = {
   visual: { shape: 'pyramid', model: MODELS.ghost, color: '#5f6f86', scale: 0.85 },
 };
 
-/** Носитель: медленный и живучий, при гибели выпускает рой дронов. */
+/** Носитель: медленный, при гибели выпускает рой дронов; прочности хватает на одну-две очереди истребителя, чтобы рой выпускали на глазах у игрока (TASK-46). */
 const carrier: EnemyConfig = {
   id: 'carrier',
   name: 'Носитель дронов',
-  hp: 320,
+  hp: 120,
   speed: 0.9,
   reward: 13,
   leakDamage: 4,
