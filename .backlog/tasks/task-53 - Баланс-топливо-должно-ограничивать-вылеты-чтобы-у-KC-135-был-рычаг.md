@@ -3,8 +3,9 @@ id: TASK-53
 title: 'Баланс: топливо должно ограничивать вылеты, чтобы у KC-135 был рычаг'
 status: To Do
 assignee:
-  - '@fable'
+  - '@opus'
 created_date: '2026-11-20T13:07:00Z'
+updated_date: '2026-11-20T13:20:00Z'
 labels:
   - balance
   - size-M

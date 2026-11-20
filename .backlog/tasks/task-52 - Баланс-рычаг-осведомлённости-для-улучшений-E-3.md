@@ -3,8 +3,9 @@ id: TASK-52
 title: 'Баланс: рычаг осведомлённости для улучшений E-3'
 status: To Do
 assignee:
-  - '@fable'
+  - '@opus'
 created_date: '2026-11-19T17:57:00Z'
+updated_date: '2026-11-20T13:20:00Z'
 labels:
   - balance
   - size-M
