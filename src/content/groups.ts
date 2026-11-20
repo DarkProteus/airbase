@@ -256,8 +256,24 @@ const kc135: AirGroupConfig = {
   weapons: [],
   auras: [{ stat: 'fuel', op: 'mul', value: 1.5, scope: 'aura' }],
   upgrades: [
-    { cost: 90, modifiers: [{ stat: 'fuel', op: 'add', value: 20, scope: 'self' }] },
-    { cost: 140, modifiers: [{ stat: 'fuel', op: 'mul', value: 1.2, scope: 'aura' }] },
+    // Улучшения заправщика (TASK-45): рычаги только топливо и оборот — баки самого заправщика (аура дольше на позиции),
+    // сила ауры, перезарядка. Потолок рычага: топливо спасает только группы, которые уходят по топливу (F-16, Growler, ДРЛО),
+    // и сдвигает единственную «дыру» их вылета, а проигрыш остальных составов решает недостаток огневой мощи, а не бак.
+    // Подробности и перебор вариантов — в docs/balance-0.2.md.
+    {
+      cost: 90,
+      modifiers: [
+        { stat: 'fuel', op: 'add', value: 40, scope: 'self' },
+        { stat: 'fuel', op: 'mul', value: 1.1, scope: 'aura' },
+      ],
+    },
+    {
+      cost: 140,
+      modifiers: [
+        { stat: 'fuel', op: 'mul', value: 1.2, scope: 'aura' },
+        { stat: 'rearmTime', op: 'add', value: -4, scope: 'self' },
+      ],
+    },
     {
       cost: 210,
       modifiers: [],
@@ -265,14 +281,21 @@ const kc135: AirGroupConfig = {
         {
           id: 'bigtank',
           name: 'Усиленная заправка',
-          description: 'Топливо союзников в ауре ×1,25 сверху: группы дольше держатся в патруле.',
-          modifiers: [{ stat: 'fuel', op: 'mul', value: 1.25, scope: 'aura' }],
+          description: 'Топливо союзников в ауре ×2 сверху, свой бак +30 с: группы почти весь матч держатся в патруле.',
+          modifiers: [
+            { stat: 'fuel', op: 'mul', value: 2, scope: 'aura' },
+            { stat: 'fuel', op: 'add', value: 30, scope: 'self' },
+          ],
         },
         {
           id: 'wide',
-          name: 'Широкая зона',
-          description: 'Радиус зоны +1,5: заправляет группы на большей площади.',
-          modifiers: [{ stat: 'range', op: 'add', value: 1.5, scope: 'self' }],
+          name: 'Непрерывное дежурство',
+          description: 'Топливо союзников в ауре ×1,3, свой бак +30 с, перезарядка −4 с: заправщик реже пропадает из патруля и быстрее возвращается на позицию.',
+          modifiers: [
+            { stat: 'fuel', op: 'mul', value: 1.3, scope: 'aura' },
+            { stat: 'fuel', op: 'add', value: 30, scope: 'self' },
+            { stat: 'rearmTime', op: 'add', value: -4, scope: 'self' },
+          ],
         },
       ],
     },
