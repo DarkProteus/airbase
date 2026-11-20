@@ -5,12 +5,13 @@ status: To Do
 assignee:
   - '@opus'
 created_date: '2026-11-20T13:07:00Z'
-updated_date: '2026-11-20T13:20:00Z'
+updated_date: '2026-11-20T13:39:00Z'
 labels:
   - balance
   - size-M
 dependencies:
   - TASK-45
+  - TASK-55
 references:
   - src/content/groups.ts
   - src/content/missions.ts

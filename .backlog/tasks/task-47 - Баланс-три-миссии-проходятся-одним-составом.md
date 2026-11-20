@@ -5,13 +5,14 @@ status: To Do
 assignee:
   - '@sonnet'
 created_date: '2026-11-16T05:35:00Z'
+updated_date: '2026-11-20T13:39:00Z'
 labels:
   - model:cheap
   - size-M
   - balance
 dependencies:
-  - TASK-42
   - TASK-46
+  - TASK-55
 references:
   - src/content/missions.ts
   - docs/balance-0.2.md
